@@ -1,0 +1,15 @@
+# Member data never goes in this repository.
+# raw/ holds the ISACA reports, data/ the count tables made from them,
+# dist/ the built dashboard, which has those tables inlined.
+raw/
+data/
+dist/
+*.xlsx
+*.xls
+*.csv
+
+__pycache__/
+*.pyc
+.venv/
+node_modules/
+.DS_Store

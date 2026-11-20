@@ -1,0 +1,278 @@
+
+
+<div class="wf-page">
+  <header class="wf-head" id="top">
+    <div class="wf-brand"><img class="wf-logo" src="assets/wf_isaca_logo.png" alt="ISACA West Florida Chapter" width="462" height="160"></div>
+    <button type="button" class="wf-theme" id="theme-toggle" aria-label="Switch between light and dark mode">Theme: auto</button>
+    <h1 class="wf-title">West Florida ISACA Member Insights</h1>
+    <p class="wf-lede">
+      <b data-draw="num" data-source="summary_v" data-field="members" data-fmt="int">—</b> members<span data-draw="scope"></span> as of
+      <span data-draw="num" data-source="summary_v" data-field="as_of" data-fmt="date">—</span>.
+      <b data-draw="num" data-source="summary_v" data-field="top3_county_share" data-fmt="pct">—</b> live in
+      <span data-draw="num" data-source="highlights" data-field="county_1" data-row="0" data-fmt="text">—</span>,
+      <span data-draw="num" data-source="highlights" data-field="county_2" data-row="0" data-fmt="text">—</span> and
+      <span data-draw="num" data-source="highlights" data-field="county_3" data-row="0" data-fmt="text">—</span> counties,
+      <b data-draw="num" data-source="summary_v" data-field="certified_share" data-fmt="pct">—</b> hold an ISACA credential, and
+      <b data-draw="num" data-source="summary_v" data-field="renewal_due" data-fmt="int">—</b> memberships end on or before 31 December
+      <span data-draw="num" data-source="summary_v" data-field="as_of" data-fmt="year">—</span>.
+    </p>
+    <p class="wf-note">Counts only. No names or contact details are held in this dashboard.</p>
+  </header>
+
+  <div class="wf-bar" id="controls">
+    <label class="wf-drill-pick">Seniority
+      <select class="dash-select wf-seniority" aria-label="Seniority group">
+        <option value="All members">All members</option>
+        <option value="C-suite and executives">C-suite and executives</option>
+        <option value="Directors, managers and consultants">Directors, managers and consultants</option>
+        <option value="Staff and senior staff">Staff and senior staff</option>
+        <option value="Students and academics">Students and academics</option>
+        <option value="Other">Other</option>
+        <option value="Not stated">Not stated</option>
+      </select>
+    </label>
+    <button type="button" class="wf-clear" hidden>Show all members</button>
+    <div class="wf-tabs" role="tablist" aria-label="Sections">
+      <button type="button" class="wf-tab" role="tab" data-tab="overview">Overview</button>
+      <button type="button" class="wf-tab" role="tab" data-tab="where">Where</button>
+      <button type="button" class="wf-tab" role="tab" data-tab="who">Who</button>
+      <button type="button" class="wf-tab" role="tab" data-tab="credentials">Credentials</button>
+      <button type="button" class="wf-tab" role="tab" data-tab="growth">Joining and renewal</button>
+      <button type="button" class="wf-tab" role="tab" data-tab="employers">Employers</button>
+    </div>
+  </div>
+
+  <section class="wf-pane" id="overview" data-pane="overview">
+    <h2 class="wf-h2 wf-printhead">Overview</h2>
+    <div class="wf-kpis" id="headline">
+      <div class="wf-card" id="kpi-members">
+        <div class="wf-k-label">Members</div>
+        <div class="wf-k-num" data-draw="num" data-source="summary_v" data-field="members" data-fmt="int">—</div>
+        <div class="wf-k-sub"><span data-draw="num" data-source="summary_v" data-field="share_of_all" data-fmt="pct">—</span> of the roster; <span data-draw="num" data-source="summary_v" data-field="in_florida" data-fmt="int">—</span> with a Florida home address</div>
+      </div>
+      <div class="wf-card" id="kpi-new">
+        <div class="wf-k-label">Joined in the last 12 months</div>
+        <div class="wf-k-num" data-draw="num" data-source="summary_v" data-field="new_12mo" data-fmt="int">—</div>
+        <div class="wf-k-sub"><span data-draw="num" data-source="summary_v" data-field="new_12mo_share" data-fmt="pct">—</span> of members; <span data-draw="num" data-source="summary_v" data-field="new_90d" data-fmt="int">—</span> in the last 90 days</div>
+      </div>
+      <div class="wf-card" id="kpi-cert">
+        <div class="wf-k-label">Hold an ISACA credential</div>
+        <div class="wf-k-num" data-draw="num" data-source="summary_v" data-field="certified_share" data-fmt="pct">—</div>
+        <div class="wf-k-sub"><span data-draw="num" data-source="summary_v" data-field="certified" data-fmt="int">—</span> members; <span data-draw="num" data-source="summary_v" data-field="no_cert" data-fmt="int">—</span> hold none</div>
+      </div>
+      <div class="wf-card" id="kpi-renew">
+        <div class="wf-k-label">Memberships ending by 31 December</div>
+        <div class="wf-k-num" data-draw="num" data-source="summary_v" data-field="renewal_due" data-fmt="int">—</div>
+        <div class="wf-k-sub"><span data-draw="num" data-source="summary_v" data-field="renewal_due_share" data-fmt="pct">—</span> of members; <span data-draw="num" data-source="summary_v" data-field="renewed_ahead" data-fmt="int">—</span> already run into next year</div>
+      </div>
+      <div class="wf-card" id="kpi-tenure">
+        <div class="wf-k-label">Median tenure</div>
+        <div class="wf-k-num"><span data-draw="num" data-source="summary_v" data-field="median_tenure_years" data-fmt="yrs">—</span> <span class="wf-k-unit">years</span></div>
+        <div class="wf-k-sub">since the join date on the roster</div>
+      </div>
+      <div class="wf-card wf-all-only" id="kpi-leaders">
+        <div class="wf-k-label">In leadership roles</div>
+        <div class="wf-k-num" data-draw="num" data-source="highlights" data-field="leaders_share" data-row="0" data-fmt="pct">—</div>
+        <div class="wf-k-sub"><span data-draw="num" data-source="highlights" data-field="leaders" data-row="0" data-fmt="int">—</span> executives, directors, managers and consultants</div>
+      </div>
+    </div>
+
+    <div class="wf-card wf-gap wf-all-only" id="movement">
+      <div class="wf-drill-head">
+        <h3 class="wf-h3 wf-flow-title">Joined and left the chapter, <span data-draw="num" data-source="movement_total" data-field="from" data-row="0" data-fmt="date">—</span> to <span data-draw="num" data-source="movement_total" data-field="to" data-row="0" data-fmt="date">—</span></h3>
+        <label class="wf-drill-pick">Month
+          <select class="dash-select" data-draw="monthpick" aria-label="Month" data-source="movement"></select>
+        </label>
+      </div>
+      <div class="wf-flow">
+        <div class="wf-flow-nums">
+          <div id="flow-joined">
+            <div class="wf-k-label">Joined</div>
+            <div class="wf-k-num" data-draw="num" data-source="movement_total" data-field="joined" data-row="0" data-fmt="int">—</div>
+            <div class="wf-k-sub"><span data-draw="num" data-source="movement_total" data-field="new_members" data-row="0" data-fmt="int">—</span> new members and <span data-draw="num" data-source="movement_total" data-field="transferred_in" data-row="0" data-fmt="int">—</span> transferred in</div>
+          </div>
+          <div id="flow-left">
+            <div class="wf-k-label">Left</div>
+            <div class="wf-k-num" data-draw="num" data-source="movement_total" data-field="transferred_out" data-row="0" data-fmt="int">—</div>
+            <div class="wf-k-sub">transferred to another chapter</div>
+          </div>
+          <div id="flow-net">
+            <div class="wf-k-label">Net change</div>
+            <div class="wf-k-num" data-draw="num" data-source="movement_total" data-field="net" data-row="0" data-fmt="signed">—</div>
+            <div class="wf-k-sub">joined minus left</div>
+          </div>
+        </div>
+        <div class="wf-chart wf-cols" id="flow-chart" data-draw="flow" data-source="movement"
+             data-aria="Column chart of members who joined, above the line, and left, below it, by week, or by day when a month is picked">—</div>
+      </div>
+      <ul class="wf-flow-detail">
+        <li>New members by type: <span data-draw="detail" data-kind="New member type" data-counts="1" data-source="movement_detail">—</span>.</li>
+        <li>Transferred in from: <span data-draw="detail" data-kind="Transferred in from" data-source="movement_detail">—</span>.</li>
+        <li>Transferred out to: <span data-draw="detail" data-kind="Transferred out to" data-source="movement_detail">—</span>.</li>
+      </ul>
+      <p class="wf-note">From ISACA's New Member and chapter transfer reports, which cover the last 90 days, so the first and last months are part months. Pick a month to see it day by day. Left counts only transfers to another chapter: members whose membership lapsed are not in these reports, so the true number who left is higher. Shown for all members only.</p>
+    </div>
+
+    <div class="wf-two wf-gap">
+      <div class="wf-card" id="drill">
+        <h3 class="wf-h3" id="drill-title">Seniority</h3>
+        <p class="wf-note wf-tight">Click a segment or a name to see only that group across every tab. Click it again to go back to all members.</p>
+        <div class="wf-chart" id="seniority-chart" data-draw="donut" data-pick="seniority" data-source="breakdowns" data-dim="Seniority" data-aria="Donut chart of members by seniority group">—</div>
+      </div>
+      <div class="wf-card" id="function-chart">
+        <h3 class="wf-h3">Job function</h3>
+        <div class="wf-chart" data-draw="tree" data-source="breakdowns_v" data-dim="Job function">—</div>
+        <p class="wf-note">Each box is sized by its number of members.</p>
+      </div>
+    </div>
+
+    <h3 class="wf-h2 wf-gap-lg" id="takeaways">What this suggests for events and engagement</h3>
+    <div class="wf-takes">
+      <div class="wf-card wf-take" id="insight-venues"><div class="wf-take-head">Venues</div>
+        <p><span data-draw="num" data-source="highlights" data-field="county_1" data-row="0" data-fmt="text">—</span> alone is home to
+        <b data-draw="num" data-source="summary_v" data-field="top_county_share" data-fmt="pct">—</b> of members, and the three largest counties to
+        <b data-draw="num" data-source="summary_v" data-field="top3_county_share" data-fmt="pct">—</b>.
+        <span class="wf-growth">Among counties with fifty or more members,
+        <span data-draw="num" data-source="highlights" data-field="growth_county" data-row="0" data-fmt="text">—</span> has the highest share of recent joiners:
+        <b data-draw="num" data-source="highlights" data-field="growth_share" data-row="0" data-fmt="pct">—</b> of its
+        <span data-draw="num" data-source="highlights" data-field="growth_members" data-row="0" data-fmt="int">—</span> members joined in the last 12 months.</span></p></div>
+      <div class="wf-card wf-take wf-topics" id="insight-topics"><div class="wf-take-head">Topics</div>
+        <p>The largest job functions are
+        <span data-draw="num" data-source="highlights" data-field="function_1" data-row="0" data-fmt="lower">—</span>
+        (<b data-draw="num" data-source="highlights" data-field="function_1_share" data-row="0" data-fmt="pct">—</b>),
+        <span data-draw="num" data-source="highlights" data-field="function_2" data-row="0" data-fmt="lower">—</span>
+        (<b data-draw="num" data-source="highlights" data-field="function_2_share" data-row="0" data-fmt="pct">—</b>) and
+        <span data-draw="num" data-source="highlights" data-field="function_3" data-row="0" data-fmt="lower">—</span>
+        (<b data-draw="num" data-source="highlights" data-field="function_3_share" data-row="0" data-fmt="pct">—</b>), so a programme weighted that way matches this audience.</p></div>
+      <div class="wf-card wf-take wf-all-only" id="insight-level"><div class="wf-take-head">Level of content</div>
+        <p><b data-draw="num" data-source="highlights" data-field="leaders_share" data-row="0" data-fmt="pct">—</b> of members are executives, directors, managers or consultants, while
+        <b data-draw="num" data-source="highlights" data-field="early_share" data-row="0" data-fmt="pct">—</b> joined within the last three years. That is two distinct audiences: leadership sessions and early-career development.</p></div>
+      <div class="wf-card wf-take" id="insight-certs"><div class="wf-take-head">Certification pipeline</div>
+        <p><b data-draw="num" data-source="summary_v" data-field="no_cert" data-fmt="int">—</b> members
+        (<span data-draw="num" data-source="summary_v" data-field="no_cert_share" data-fmt="pct">—</span>) hold no ISACA credential, the natural audience for exam preparation.
+        <b data-draw="num" data-source="summary_v" data-field="ai_cert_holders" data-fmt="int">—</b> hold one of the AI credentials (AAIA, AAISM or AAIR).</p></div>
+      <div class="wf-card wf-take" id="insight-renewal"><div class="wf-take-head">Renewal</div>
+        <p><b data-draw="num" data-source="summary_v" data-field="renewal_due" data-fmt="int">—</b> memberships
+        (<span data-draw="num" data-source="summary_v" data-field="renewal_due_share" data-fmt="pct">—</span>) end on or before 31 December, which makes the weeks before it the window for a renewal push.</p></div>
+    </div>
+  </section>
+
+  <section class="wf-pane" id="where" data-pane="where" hidden>
+    <h2 class="wf-h2">Where members live</h2>
+    <p class="wf-sub">By home ZIP code. Shading shows members per county; each circle is one ZIP code, sized by its members. Zoom with the buttons, a double-click or a pinch, or hold Ctrl or ⌘ while scrolling; drag to move once zoomed in.</p>
+    <div class="wf-two">
+      <div class="wf-card wf-chart wf-map" id="map" data-draw="map" data-source="counties_v zips_v"
+           data-aria="Map of west central Florida with counties shaded by member count and a circle for each home ZIP code">—</div>
+      <div class="wf-stack">
+        <div class="wf-card" id="city-chart">
+          <h3 class="wf-h3">Largest home cities</h3>
+          <div class="wf-chart" data-draw="bars" data-source="cities_v" data-label="city" data-value="members" data-share="share" data-top="15" data-look="lollipop">—</div>
+        </div>
+        <div class="wf-card" id="county-table">
+          <h3 class="wf-h3">Counties</h3>
+          <div class="wf-scroll">
+            <table class="wf-table" data-source="counties_v" data-row-key="county">
+              <thead><tr>
+                <th data-field="county">County</th>
+                <th class="wf-num" data-field="members">Members</th>
+                <th class="wf-num" data-field="share">Share</th>
+                <th class="wf-num" data-field="new_12mo">Joined, last 12 months</th>
+                <th class="wf-num" data-field="certified">With a credential</th>
+              </tr></thead>
+              <tbody data-draw="rows" data-src="counties_v" data-cols="county,members:int,share:pct,new_12mo:int,certified:int"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="wf-card wf-gap" id="region-function">
+      <h3 class="wf-h3">Job function by home region</h3>
+      <p class="wf-note wf-tight">Members in each cell. More strongly shaded cells are a larger share of that region's members.</p>
+      <div class="wf-chart wf-scroll-x" data-draw="matrix" data-source="region_function_v">—</div>
+    </div>
+  </section>
+
+  <section class="wf-pane" id="who" data-pane="who" hidden>
+    <h2 class="wf-h2">Who the members are</h2>
+    <p class="wf-sub">How the group shown divides by tenure, level, type and gender.</p>
+    <div class="wf-grid">
+      <div class="wf-card" id="tenure-chart"><h3 class="wf-h3">Tenure</h3>
+        <div class="wf-chart" data-draw="split" data-source="breakdowns_v" data-dim="Tenure">—</div></div>
+      <div class="wf-card" id="level-chart"><h3 class="wf-h3">Member level</h3>
+        <div class="wf-chart" data-draw="donut" data-palette="ordered" data-source="breakdowns_v" data-dim="Member level" data-aria="Donut chart of members by member level">—</div></div>
+      <div class="wf-card" id="type-chart"><h3 class="wf-h3">Member type</h3>
+        <div class="wf-chart" data-draw="waffle" data-source="breakdowns_v" data-dim="Member type">—</div>
+        <p class="wf-note">One hundred squares, each about 1% of the group. Types under half a percent get no square.</p></div>
+      <div class="wf-card" id="gender-chart"><h3 class="wf-h3">Gender</h3>
+        <div class="wf-chart" data-draw="donut" data-source="breakdowns_v" data-dim="Gender" data-aria="Donut chart of members by gender">—</div>
+        <p class="wf-note"><span data-draw="num" data-source="breakdowns_v" data-field="share" data-where="dimension=Gender&amp;category=Not stated" data-fmt="pct">—</span> of members did not state a gender.</p></div>
+    </div>
+    <div class="wf-card wf-gap" id="area-chart"><h3 class="wf-h3">Professional area, as members chose it</h3>
+      <p class="wf-note wf-tight">Job function and seniority are groupings of these categories.</p>
+      <div class="wf-chart" data-draw="bars" data-source="breakdowns_v" data-dim="Professional area" data-label="category" data-value="members" data-share="share" data-wide="1">—</div></div>
+  </section>
+
+  <section class="wf-pane" id="credentials" data-pane="credentials" hidden>
+    <h2 class="wf-h2">Credentials</h2>
+    <div class="wf-two">
+      <div class="wf-card" id="cert-chart"><h3 class="wf-h3">Members holding each credential</h3>
+        <div class="wf-chart" data-draw="bars" data-source="certifications_v" data-label="cert" data-value="holders" data-share="share">—</div>
+        <p class="wf-note">A member with several credentials is counted under each.</p></div>
+      <div class="wf-card" id="certcount-chart"><h3 class="wf-h3">Number of credentials held</h3>
+        <div class="wf-chart" data-draw="split" data-source="breakdowns_v" data-dim="Certifications held">—</div></div>
+    </div>
+  </section>
+
+  <section class="wf-pane" id="growth" data-pane="growth" hidden>
+    <h2 class="wf-h2">Joining and renewal</h2>
+    <div class="wf-card" id="renewal-chart"><h3 class="wf-h3">Renewal status</h3>
+      <div class="wf-chart" data-draw="split" data-source="breakdowns_v" data-dim="Renewal status">—</div></div>
+    <div class="wf-two wf-gap">
+      <div class="wf-card" id="join-month-chart"><h3 class="wf-h3">Current members by the month they joined, last two years</h3>
+        <div class="wf-chart wf-cols" data-draw="trend" data-source="join_month_v" data-x="month" data-y="members" data-kind="month"
+             data-aria="Line chart of current members by the month they joined over the last two years">—</div>
+        <p class="wf-note">The latest month is partial.</p></div>
+      <div class="wf-card" id="join-year-chart"><h3 class="wf-h3">Current members by the year they joined</h3>
+        <div class="wf-chart wf-cols" data-draw="cols" data-source="join_year_v" data-x="year" data-y="members" data-kind="year"
+             data-aria="Column chart of current members by the year they joined">—</div>
+        <p class="wf-note">Only people still on the roster are counted, so earlier years look smaller than the number who actually joined then. This is not a growth trend.</p></div>
+    </div>
+  </section>
+
+  <section class="wf-pane" id="employers" data-pane="employers" hidden>
+    <h2 class="wf-h2">Employers</h2>
+    <p class="wf-sub">Employers with three or more members in the group shown, as a guide to sponsors, hosts and corporate outreach.</p>
+    <div class="wf-two">
+      <div class="wf-card" id="employer-chart"><h3 class="wf-h3">Largest employers</h3>
+        <div class="wf-chart" data-draw="bubbles" data-source="employers_v" data-top="25" data-aria="Bubble chart of the largest employers by number of members">—</div>
+        <p class="wf-note">The 25 largest, each circle sized by its members. Point at a circle for its name and count; the table lists them all.</p></div>
+      <div class="wf-card" id="employer-table"><h3 class="wf-h3">All employers with three or more members</h3>
+        <div class="wf-scroll">
+          <table class="wf-table" data-source="employers_v" data-row-key="employer">
+            <thead><tr>
+              <th data-field="employer">Employer</th>
+              <th class="wf-num" data-field="members">Members</th>
+              <th class="wf-num" data-field="share">Share</th>
+            </tr></thead>
+            <tbody data-draw="rows" data-src="employers_v" data-cols="employer,members:int,share:pct"></tbody>
+          </table>
+        </div></div>
+    </div>
+  </section>
+
+  <details class="wf-details" id="notes">
+    <summary>How these numbers were made, and their limits</summary>
+    <ul>
+      <li>Everything comes from one export of the chapter's full member roster. It is a snapshot: it shows who is a member now, not who attends events or how membership changed over time.</li>
+      <li>Location uses each member's home ZIP code. Members with a home address outside Florida are counted in the totals but not shown on the map.</li>
+      <li>Job function and seniority are groupings of the professional area field, made for this dashboard. The original categories are shown in full under "Professional area".</li>
+      <li>Employer names are as members typed them, with common variants of the same name merged. Blank and placeholder entries are left out, and employers with fewer than three members in the group shown are not listed.</li>
+      <li>Shares are a percentage of all members on the roster or, when a seniority group is picked, of that group.</li>
+      <li>Seniority groups: C-suite and executives are the chief officer, VP and EVP categories; directors, managers and consultants are the categories named that way; staff and senior staff are the staff and auditor categories; students and academics are students, professors and teachers.</li>
+      <li>Small groups give small numbers. A chart for a group of a few dozen members is a count of a few people, not a trend.</li>
+    </ul>
+  </details>
+</div>
+
+
+
