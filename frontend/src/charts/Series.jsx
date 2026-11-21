@@ -60,7 +60,7 @@ export function Columns({ rows, x: X, y: Y, label, emphasis = 0 }) {
         ))}
         {rows.map((r) => (
           <rect key={`h${r[X]}`} className="wf-hit" x={x(r[X]) - x.step() * 0.1} width={x.step()} y={m.t} height={H - m.b - m.t}
-            {...tip.props(`${r[X]}: ${fmt.int(r[Y])} current members joined`)} />
+            {...tip.props(`${r[X]}: ${fmt.int(r[Y])} current ${+r[Y] === 1 ? 'member' : 'members'} joined`)} />
         ))}
       </svg>
     );
@@ -116,7 +116,7 @@ export function Trend({ rows, label }) {
           <text key={`x${r.month}`} className="wf-tick" x={x(r.month)} y={H - 6} textAnchor="middle">{fmt.month(r.month)}</text>
         ))}
         {rows.map((r, i) => {
-          const hover = tip.props(`${fmt.longMonth(r.month)}: ${fmt.int(r.members)} current members joined${r === last && rows.length > 1 ? ' so far (part month)' : ''}`);
+          const hover = tip.props(`${fmt.longMonth(r.month)}: ${fmt.int(r.members)} current ${+r.members === 1 ? 'member' : 'members'} joined${r === last && rows.length > 1 ? ' so far (part month)' : ''}`);
           return (
             <rect key={`h${r.month}`} x={x(r.month) - step / 2} width={step} y={m.t} height={H - m.b - m.t} style={{ fill: 'transparent' }}
               {...hover} onPointerEnter={() => setAt(i)} />
