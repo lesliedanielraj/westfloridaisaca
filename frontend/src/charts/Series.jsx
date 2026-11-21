@@ -52,7 +52,7 @@ export function Columns({ rows, x: X, y: Y, label, emphasis = 0 }) {
           <path key={r[X]} d={column(left(r), y(+r[Y]), bw, y(0) - y(+r[Y]))}
             style={{ fill: strong(i) ? COLORS[0] : `color-mix(in srgb, ${COLORS[0]} 38%, var(--color-panel))` }} />
         ))}
-        {rows.map((r, i) => (emphasis ? strong(i) : x.bandwidth() >= 22) && (
+        {rows.map((r, i) => (emphasis ? strong(i) && (x.step() >= 30 || i === rows.length - 1) : x.bandwidth() >= 22) && (
           <text key={`v${r[X]}`} className="wf-vlabel" x={left(r) + bw / 2} y={y(+r[Y]) - 5} textAnchor="middle">{fmt.int(r[Y])}</text>
         ))}
         {rows.filter((r, i) => (rows.length - 1 - i) % every === 0).map((r) => (

@@ -1,34 +1,33 @@
-import { useEffect, useState } from 'react';
-import { useApi } from './api.js';
-import logo from './assets/wf_isaca_logo.png';
-import { FILTER_LABELS, FILTER_NAMES, useFilters } from './filters.jsx';
-import Credentials from './pages/Credentials.jsx';
-import Employers from './pages/Employers.jsx';
-import Growth from './pages/Growth.jsx';
-import Overview from './pages/Overview.jsx';
-import Where from './pages/Where.jsx';
-import Who from './pages/Who.jsx';
-import { fmt } from './util.js';
+import { useEffect, useRef, useState } from 'react';
+import Placeholder from './pages/Placeholder.jsx';
+import Reporting, { TABS } from './pages/Reporting.jsx';
+import Shell, { Icon } from './Shell.jsx';
 
-const TABS = [
-  ['overview', 'Overview', Overview],
-  ['where', 'Where', Where],
-  ['who', 'Who', Who],
-  ['credentials', 'Credentials', Credentials],
-  ['growth', 'Joining and renewal', Growth],
-  ['employers', 'Employers', Employers],
+// The site's sections, in the order the navigation lists them. `ready` is false while a page is not built.
+export const SECTIONS = [
+  { id: 'home', name: 'Home', icon: 'home', ready: false },
+  { id: 'reporting', name: 'Reporting', icon: 'chart', ready: true, title: 'Member Insights' },
+  { id: 'events', name: 'Event Management', icon: 'calendar', ready: false },
+  { id: 'speakers', name: 'Speaker Management', icon: 'mic', ready: false },
+  { id: 'contact', name: 'Contact Us', icon: 'mail', ready: false },
 ];
-const tabFromAddress = () => {
-  const name = window.location.hash.replace('#', '');
-  return TABS.some(([id]) => id === name) ? name : 'overview';
-};
 
-// Auto follows the computer's setting; light and dark override it. The choice is remembered.
+// Where the address points: '#events' is a section, '#where' is a tab of Reporting (so older links still work).
+function routeFromAddress() {
+  const id = window.location.hash.slice(1);
+  if (TABS.some(([tab]) => tab === id)) return { section: 'reporting', tab: id };
+  if (SECTIONS.some((s) => s.id === id)) return { section: id, tab: TABS[0][0] };
+  return { section: 'home', tab: TABS[0][0] };
+}
+
 const MODES = [['auto', 'Auto'], ['light', 'Light'], ['dark', 'Dark']];
-// Colour themes: the name, and the lead colour shown on its button in light and in dark.
+// Colour themes, in the order of the colour wheel: the name, and the lead colour shown on its button.
 const ACCENTS = [
-  ['blue', 'Blue', '#3565c9', '#5f8fe8'], ['teal', 'Teal', '#00909a', '#159fa8'], ['violet', 'Violet', '#6b4fc0', '#9076ee'],
-  ['green', 'Green', '#2e8552', '#3aad6e'], ['crimson', 'Crimson', '#b23a52', '#e35f7c'],
+  ['blue', 'Blue', '#3565c9'], ['azure', 'Azure', '#0079b3'], ['cyan', 'Cyan', '#0389a0'], ['teal', 'Teal', '#00909a'],
+  ['emerald', 'Emerald', '#078661'], ['green', 'Green', '#2e8552'], ['olive', 'Olive', '#6c7b06'], ['amber', 'Amber', '#9a7403'],
+  ['orange', 'Orange', '#ab5806'], ['coral', 'Coral', '#cb4a2a'], ['crimson', 'Crimson', '#b23a52'], ['rose', 'Rose', '#bb3a6d'],
+  ['magenta', 'Magenta', '#ae4090'], ['orchid', 'Orchid', '#a552b7'], ['purple', 'Purple', '#8951bf'], ['violet', 'Violet', '#6b4fc0'],
+  ['indigo', 'Indigo', '#5863d3'],
 ];
 
 function saved(key, allowed, fallback) {
@@ -38,10 +37,14 @@ function saved(key, allowed, fallback) {
   } catch { return fallback; }
 }
 
-// Light or dark, and one of five colour themes. Both are remembered on this computer.
-function Appearance() {
+// The settings gear in the top bar. Its panel holds the appearance choices: light or dark, and one of five
+// colour themes. Both are remembered on this computer, and applied whether or not the panel is open.
+function Settings() {
   const [mode, setMode] = useState(() => saved('wf-theme', MODES.map((m) => m[0]), 'auto'));
   const [accent, setAccent] = useState(() => saved('wf-accent', ACCENTS.map((a) => a[0]), 'blue'));
+  const [open, setOpen] = useState(false);
+  const box = useRef(null);
+
   useEffect(() => {
     const root = document.documentElement;
     if (mode === 'auto') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', mode);
@@ -51,129 +54,60 @@ function Appearance() {
       window.localStorage.setItem('wf-accent', accent);
     } catch { /* not saved */ }
   }, [mode, accent]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (event) => { if (event.key === 'Escape') setOpen(false); };
+    const onDown = (event) => { if (box.current && !box.current.contains(event.target)) setOpen(false); };
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('pointerdown', onDown);
+    return () => { window.removeEventListener('keydown', onKey); window.removeEventListener('pointerdown', onDown); };
+  }, [open]);
+
   return (
-    <div className="wf-looks">
-      <div className="wf-swatches" role="radiogroup" aria-label="Colour theme">
-        {ACCENTS.map(([id, name, light]) => (
-          <button key={id} type="button" role="radio" aria-checked={accent === id} aria-label={`${name} colour theme`} title={name}
-            className="wf-swatch-btn" style={{ background: light }} onClick={() => setAccent(id)} />
-        ))}
-      </div>
-      <div className="wf-seg" role="group" aria-label="Light or dark">
-        {MODES.map(([id, name]) => (
-          <button key={id} type="button" className="wf-seg-btn" aria-pressed={mode === id} onClick={() => setMode(id)}>{name}</button>
-        ))}
-      </div>
+    <div className="wf-settings" ref={box}>
+      <button type="button" className="wf-gear" aria-label="Settings" title="Settings" aria-haspopup="dialog" aria-expanded={open}
+        onClick={() => setOpen(!open)}><Icon name="gear" /></button>
+      {open && (
+        <div className="wf-settings-panel" role="dialog" aria-label="Settings">
+          <div className="wf-settings-head">Settings</div>
+          <div className="wf-settings-label" id="wf-set-mode">Appearance</div>
+          <div className="wf-seg wf-seg-fill" role="group" aria-labelledby="wf-set-mode">
+            {MODES.map(([id, name]) => (
+              <button key={id} type="button" className="wf-seg-btn" aria-pressed={mode === id} onClick={() => setMode(id)}>{name}</button>
+            ))}
+          </div>
+          <div className="wf-settings-label" id="wf-set-colour">Colour theme</div>
+          <div className="wf-swatches" role="radiogroup" aria-labelledby="wf-set-colour">
+            {ACCENTS.map(([id, name, light]) => (
+              <button key={id} type="button" role="radio" aria-checked={accent === id} aria-label={`${name} colour theme`} title={name}
+                className="wf-swatch-btn" style={{ background: light }} onClick={() => setAccent(id)} />
+            ))}
+          </div>
+          <div className="wf-settings-note">{ACCENTS.find((a) => a[0] === accent)[1]}, {MODES.find((m) => m[0] === mode)[1].toLowerCase()}. Saved on this computer.</div>
+        </div>
+      )}
     </div>
-  );
-}
-
-function Header({ summary }) {
-  const { any } = useFilters();
-  const s = summary;
-  return (
-    <header className="wf-head">
-      <Appearance />
-      <div className="wf-brand"><img className="wf-logo" src={logo} alt="ISACA West Florida Chapter" width="462" height="160" /></div>
-      <h1 className="wf-title">West Florida ISACA Member Insights</h1>
-      <p className="wf-lede">
-        {!s ? '—' : s.withheld ? (
-          <>Fewer than {s.min_selection} members match these filters, so nothing is shown: figures for so few would describe
-            individuals. Clear a filter to see more.</>
-        ) : (
-          <><b>{fmt.int(s.members)}</b> members{any ? ' match the filters' : ''}, as of {fmt.date(s.as_of)}. Counts only: the site holds no names or contact details.</>
-        )}
-      </p>
-    </header>
-  );
-}
-
-function FilterBar({ meta, tab, setTab }) {
-  const { values, set, clear, any } = useFilters();
-  return (
-    <div className="wf-bar" id="controls">
-      <div className="wf-filters" role="group" aria-label="Filters">
-        {FILTER_NAMES.map((name) => (
-          <label key={name} className="wf-drill-pick">{FILTER_LABELS[name]}
-            <select className={`dash-select${values[name] ? ' wf-select-on' : ''}`} value={values[name] || ''}
-              onChange={(e) => set(name, e.target.value)}>
-              <option value="">All</option>
-              {meta.filters[name].map((option) => <option key={option} value={option}>{option}</option>)}
-            </select>
-          </label>
-        ))}
-        {any && <button type="button" className="wf-clear" onClick={clear}>Clear filters</button>}
-      </div>
-      <div className="wf-tabs" role="tablist" aria-label="Sections">
-        {TABS.map(([id, label]) => (
-          <button key={id} type="button" role="tab" aria-selected={tab === id}
-            className={`wf-tab${tab === id ? ' wf-tab-on' : ''}`} onClick={() => setTab(id)}>
-            {label}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function Notes() {
-  return (
-    <details className="wf-details" id="notes">
-      <summary>How these numbers are made, and their limits</summary>
-      <ul>
-        <li>Everything comes from ISACA&apos;s chapter reports. The roster is a snapshot: it shows who is a member now, not who
-          attends events or how membership changed over time.</li>
-        <li>Filters combine. Shares are a percentage of the members the filters select, or of all members when none is set.</li>
-        <li>Location uses each member&apos;s home ZIP code. Members with a home address outside Florida are counted in totals but
-          not shown on the map.</li>
-        <li>Job function and seniority are groupings of the professional area each member chose. The original categories are
-          on the Who tab.</li>
-        <li>Seniority groups: C-suite and executives are the chief officer, VP and EVP categories; directors, managers and
-          consultants are the categories named that way; staff and senior staff are the staff and auditor categories; students
-          and academics are students, professors and teachers.</li>
-        <li>Small groups are held back to protect members. An employer, ZIP code or city shared by fewer than five members
-          is not stored, so those members count in their county and in totals but not on the employer list or as a point on
-          the map. Filters that select fewer than five members show nothing.</li>
-        <li>Dates are kept to the month. Employer names are as members typed them, with common variants of the same name
-          merged.</li>
-        <li>Small groups give small numbers. A chart for a few dozen members is a count of a few people, not a trend.</li>
-      </ul>
-    </details>
   );
 }
 
 export default function App() {
-  const { values } = useFilters();
-  const [tab, setTabState] = useState(tabFromAddress);
-  const { data: meta, error } = useApi('/meta');
-  const { data: summary } = useApi('/summary', values);
-
+  const [route, setRoute] = useState(routeFromAddress);
   useEffect(() => {
-    const onHash = () => setTabState(tabFromAddress());
+    const onHash = () => setRoute(routeFromAddress());
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
-  const setTab = (id) => { window.location.hash = id; setTabState(id); };
+  const section = SECTIONS.find((s) => s.id === route.section);
+  const title = section.title || section.name;
+  useEffect(() => { document.title = `${title} · ISACA West Florida`; }, [title]);
+  const setTab = (id) => { window.location.hash = id; };
 
-  if (error) {
-    return (
-      <div className="wf-app"><div className="wf-page">
-        <h1 className="wf-title">West Florida ISACA Member Insights</h1>
-        <p className="wf-error">The site could not reach its data: {error}</p>
-      </div></div>
-    );
-  }
-  if (!meta) return <div className="wf-app"><div className="wf-page"><p className="wf-note">Loading…</p></div></div>;
-
-  const Page = TABS.find(([id]) => id === tab)[2];
   return (
-    <div className="wf-app">
-      <div className="wf-page">
-        <Header summary={summary} />
-        <FilterBar meta={meta} tab={tab} setTab={setTab} />
-        <Page meta={meta} summary={summary} />
-        <Notes />
-      </div>
-    </div>
+    <Shell sections={SECTIONS} current={section.id} title={title} tools={<Settings />}>
+      {section.id === 'reporting'
+        ? <Reporting tab={route.tab} setTab={setTab} />
+        : <Placeholder name={section.name} icon={<Icon name={section.icon} size={30} />} />}
+    </Shell>
   );
 }
