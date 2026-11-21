@@ -15,3 +15,7 @@ __pycache__/
 .venv/
 node_modules/
 .DS_Store
+
+# ISACA's credential logos are added locally, not published here.
+frontend/src/assets/credentials/*
+!frontend/src/assets/credentials/README.md

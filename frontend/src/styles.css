@@ -334,3 +334,6 @@ button.wf-chip { cursor: pointer; }
 .wf-cred-val { font-variant-numeric: tabular-nums; color: var(--color-fg-muted); white-space: nowrap; }
 .wf-cred-bar { height: 6px; margin-top: 5px; }
 .wf-cred-bar i { display: block; height: 100%; min-width: 2px; border-radius: 0 3px 3px 0; background: var(--wf-c1); }
+.wf-cred-logo { height: 44px; width: auto; max-width: 120px; object-fit: contain; margin-top: 8px; }
+.wf-cred-logo-small { height: 26px; max-width: 64px; margin: 0; flex: 0 0 auto; }
+.wf-cred-name { display: flex; align-items: center; gap: 8px; min-width: 0; }

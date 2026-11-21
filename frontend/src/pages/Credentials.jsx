@@ -20,6 +20,10 @@ const NAMES = {
   CSXF: 'Cybersecurity Fundamentals certificate',
   CSXA: 'Cybersecurity Audit certificate',
 };
+// Official logos, where the chapter has added them to src/assets/credentials (see the README there).
+const LOGO_FILES = import.meta.glob('../assets/credentials/*.{png,svg,webp,jpg}', { eager: true, query: '?url', import: 'default' });
+const LOGOS = Object.fromEntries(Object.entries(LOGO_FILES).map(([path, url]) => [path.split('/').pop().replace(/\.[a-z]+$/, '').toUpperCase(), url]));
+
 const CORE = ['CISA', 'CISM', 'CRISC', 'CDPSE', 'CGEIT'];
 const GROUPS = [
   { title: 'AI credentials', note: 'ISACA\'s newest credentials, for audit, security and risk work on AI.', codes: ['AAIA', 'AAISM', 'AAIR'] },
@@ -82,6 +86,7 @@ export default function Credentials() {
             {CORE.map((code) => (
               <div key={code} className={`wf-ringcard wf-pickable${state(code)}`} {...pickProps(code)} {...tip.props(hint(code))}>
                 <Ring share={row(code).share} />
+                {LOGOS[code] && <img className="wf-cred-logo" src={LOGOS[code]} alt="" />}
                 <div className="wf-ring-code">{code}</div>
                 <div className="wf-ring-name">{NAMES[code]}</div>
                 <div className="wf-ring-count">{fmt.int(row(code).holders)} holders</div>
@@ -101,7 +106,10 @@ export default function Credentials() {
                 {group.codes.map((code) => (
                   <div key={code} className={`wf-cred wf-pickable${state(code)}`} {...pickProps(code)} {...tip.props(hint(code))}>
                     <div className="wf-cred-head">
-                      <span><b>{code}</b> <span className="wf-quiet">{NAMES[code]}</span></span>
+                      <span className="wf-cred-name">
+                        {LOGOS[code] && <img className="wf-cred-logo wf-cred-logo-small" src={LOGOS[code]} alt="" />}
+                        <span><b>{code}</b> <span className="wf-quiet">{NAMES[code]}</span></span>
+                      </span>
                       <span className="wf-cred-val">{fmt.int(row(code).holders)} · {fmt.pct(row(code).share)}</span>
                     </div>
                     <div className="wf-cred-bar"><i style={{ width: `${(100 * row(code).holders) / smallMost}%` }} /></div>
