@@ -314,3 +314,23 @@ button.wf-chip { cursor: pointer; }
 .wf-lead-line { font-size: var(--cds-font-size-body); margin: 2px 0 10px; }
 .wf-lead-meter { align-self: stretch; }
 .wf-lead-rest { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); margin: var(--cds-gap-md) 0 var(--cds-gap-sm); }
+
+/* Credentials: rings for the core certifications, short lists for the rest */
+.wf-rings { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: var(--cds-gap-md); margin-top: var(--cds-gap-sm); }
+.wf-ringcard { display: flex; flex-direction: column; align-items: center; text-align: center; padding: var(--cds-pad-md) var(--cds-pad-sm); border: 1px solid transparent; border-radius: var(--cds-radius); cursor: pointer; transition: background 0.12s, opacity 0.12s; }
+.wf-ringcard:hover, .wf-cred:hover { background: color-mix(in srgb, var(--wf-c1) 7%, transparent); }
+.wf-ringcard.wf-on, .wf-cred.wf-on { border-color: var(--color-fg); background: color-mix(in srgb, var(--wf-c1) 10%, transparent); }
+.wf-ringcard:focus-visible, .wf-cred:focus-visible { outline: 2px solid var(--wf-c1); outline-offset: 2px; }
+.wf-ring { width: 112px; height: 112px; }
+.wf-ring-track { fill: none; stroke: color-mix(in srgb, var(--wf-c1) 16%, var(--color-panel)); stroke-width: 9; }
+.wf-ring-fill { fill: none; stroke: var(--wf-c1); stroke-width: 9; stroke-linecap: round; }
+.wf-ring text { fill: var(--color-fg); font-family: var(--font-anthropic-sans); font-size: 15px; font-weight: 500; }
+.wf-ring-code { font-size: var(--cds-font-size-heading); font-weight: var(--cds-font-weight-medium); margin-top: 6px; }
+.wf-ring-name { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); line-height: 1.3; min-height: 2.6em; }
+.wf-ring-count { font-size: var(--cds-font-size-caption); font-variant-numeric: tabular-nums; margin-top: 4px; }
+.wf-credlist { display: flex; flex-direction: column; gap: 4px; }
+.wf-cred { padding: 7px 8px; margin: 0 -8px; border: 1px solid transparent; border-radius: var(--cds-radius); cursor: pointer; font-size: var(--cds-font-size-caption); }
+.wf-cred-head { display: flex; justify-content: space-between; align-items: baseline; gap: var(--cds-gap-sm); }
+.wf-cred-val { font-variant-numeric: tabular-nums; color: var(--color-fg-muted); white-space: nowrap; }
+.wf-cred-bar { height: 6px; margin-top: 5px; }
+.wf-cred-bar i { display: block; height: 100%; min-width: 2px; border-radius: 0 3px 3px 0; background: var(--wf-c1); }
