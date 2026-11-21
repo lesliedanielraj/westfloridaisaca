@@ -1,6 +1,7 @@
 # Security scan with ASH, the AWS Automated Security Helper, on every pull request into main.
 # It fails the pull request on any finding of medium severity or higher, posts a summary as a
 # comment, and keeps the full reports as the "ash_output" artifact of the run.
+# A second check fails the pull request if a report, database, archive or key file is tracked.
 name: ASH security scan
 on:
   pull_request:
@@ -11,6 +12,24 @@ concurrency:
   group: ash-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 jobs:
+  no-member-data:
+    name: No member data
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Fail if a report, database, archive or key is in the repository
+        run: |
+          found=$(git ls-files | grep -iE '(^|/)(raw|data)/|\.(xlsx?|xlsm|csv|tsv|parquet|db|db-journal|db-wal|db-shm|sqlite3?|bak|dump|zip|tgz|tar|gz|7z|key|pem)$|(^|/)\.env(\.|$)' || true)
+          if [ -n "$found" ]; then
+            echo "These files must not be committed. Member data and keys stay off GitHub:"
+            echo "$found"
+            exit 1
+          fi
+          echo "No report, database, archive or key is tracked."
   ash:
     uses: awslabs/automated-security-helper/.github/workflows/run-ash-security-scan.yml@f356ca77388a4c58bcf25d904a21121ab8872a66 # v3.8.0
     permissions:
