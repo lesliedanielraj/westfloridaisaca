@@ -1,9 +1,14 @@
 # West Florida ISACA Member Insights
 
-A website of membership figures for the ISACA West Florida Chapter board: where members
+A website for the ISACA West Florida Chapter board. Its first section reports membership figures: where members
 live, who they are by seniority and job function, the credentials they hold, who joined
 and left, and which employers they work for. It is built to inform decisions on events,
 conferences and engagement.
+
+The site has five sections in a navigation pane on the left: Home, Reporting, Event
+Management, Speaker Management and Contact Us. Reporting is built; the other four are
+placeholders marked "under construction". To add a page, give its section a component in
+`frontend/src/App.jsx` and set `ready: true`.
 
 It has three parts:
 
@@ -245,8 +250,9 @@ backend/
 tools/pii_scan.py  reads every tracked file for personal details
 .ashrc.yaml        scan settings
 frontend/
-  src/App.jsx      header, filter bar and tabs
-  src/pages/       one file per tab
+  src/App.jsx      the site's sections, the address each lives at, and the appearance controls
+  src/Shell.jsx    the collapsible navigation pane and the top bar
+  src/pages/       Reporting.jsx (filters, tabs and notes), one file per reporting tab, and Placeholder.jsx
   src/charts/      donut, treemap, bars, map and the other charts
   src/geo/         county outlines and the basemap
   src/api.js       useApi(): fetch from the API when the filters change
@@ -256,8 +262,8 @@ static-dashboard/  the earlier single-file version; see its README
 
 ## Appearance
 
-The header has a light, dark or automatic switch and five colour themes: blue, teal,
-violet, green and crimson. Both choices are remembered in the browser. Each theme's four
+The settings gear at the top right holds a light, dark or automatic switch and five
+colour themes: blue, teal, violet, green and crimson. Both choices are remembered in the browser. Each theme's four
 chart colours were checked for colour-blind separation, in light and in dark, with the
 palette validator from the charting guidance the site follows. To add a theme, add its
 colours to `frontend/src/styles.css` and its name to `ACCENTS` in `frontend/src/App.jsx`.
