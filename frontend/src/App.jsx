@@ -43,9 +43,7 @@ function ThemeToggle() {
 }
 
 function Header({ summary }) {
-  const { values, any } = useFilters();
-  const { data: counties } = useApi('/counties', values);
-  const top = counties ? counties.rows.slice(0, 3).map((c) => c.county) : [];
+  const { any } = useFilters();
   const s = summary;
   return (
     <header className="wf-head">
@@ -53,22 +51,8 @@ function Header({ summary }) {
       <div className="wf-brand"><img className="wf-logo" src={logo} alt="ISACA West Florida Chapter" width="462" height="160" /></div>
       <h1 className="wf-title">West Florida ISACA Member Insights</h1>
       <p className="wf-lede">
-        {s ? (
-          <>
-            <b>{fmt.int(s.members)}</b> members{any ? ' match the filters' : ''} as of {fmt.date(s.as_of)}.
-            {s.members > 0 && (
-              <>
-                {!values.county && top.length === 3 && (
-                  <> <b>{fmt.pct(s.top3_county_share)}</b> live in {top[0]}, {top[1]} and {top[2]} counties,</>
-                )}
-                {' '}<b>{fmt.pct(s.certified_share)}</b> hold an ISACA credential, and <b>{fmt.int(s.renewal_due)}</b> memberships end
-                on or before 31 December {s.as_of.slice(0, 4)}.
-              </>
-            )}
-          </>
-        ) : '—'}
+        {s ? <><b>{fmt.int(s.members)}</b> members{any ? ' match the filters' : ''}, as of {fmt.date(s.as_of)}. Counts only: the site holds no names or contact details.</> : '—'}
       </p>
-      <p className="wf-note">Counts only. The site holds no names or contact details.</p>
     </header>
   );
 }

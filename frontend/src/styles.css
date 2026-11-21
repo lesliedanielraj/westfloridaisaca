@@ -273,3 +273,23 @@ button.wf-chip { cursor: pointer; }
 .wf-take p { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); line-height: 1.5; }
 .wf-take p b { color: var(--color-fg); }
 .wf-kpi .wf-k-label { min-height: 2.8em; }
+
+/* Where: sortable county table and the region grid */
+.wf-sort { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: inherit; }
+.wf-sort:hover { color: var(--color-fg); }
+.wf-sort:focus-visible { outline: 2px solid var(--wf-c1); outline-offset: 2px; }
+.wf-table th[aria-sort="ascending"], .wf-table th[aria-sort="descending"] { color: var(--color-fg); }
+.wf-table td { vertical-align: middle; }
+.wf-cellbar { position: relative; min-width: 96px; }
+.wf-cellbar i { position: absolute; right: 44px; top: 50%; height: 8px; max-width: calc(100% - 52px); transform: translateY(-50%); border-radius: 4px 0 0 4px; background: color-mix(in srgb, var(--wf-c1) 70%, var(--color-panel)); }
+.wf-cellbar span { position: relative; }
+.wf-quiet { color: var(--color-fg-muted); }
+.wf-seg-small { margin-bottom: var(--cds-gap-sm); }
+.wf-seg-small .wf-seg-btn { padding: 5px 10px; }
+.wf-matrix { table-layout: fixed; border-spacing: 3px; min-width: 760px; }
+.wf-matrix th { line-height: 1.25; }
+.wf-matrix th.wf-rowhead { width: 132px; }
+.wf-matrix td { padding: 10px 6px; border-radius: 5px; }
+.wf-matrix td.wf-matrix-strong { color: var(--color-bg); font-weight: var(--cds-font-weight-medium); }
+.wf-matrix .wf-matrix-total { width: 62px; color: var(--color-fg-muted); background: none; }
+.wf-table td.wf-num { white-space: nowrap; }

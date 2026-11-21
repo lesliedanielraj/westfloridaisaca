@@ -170,9 +170,6 @@ function Takeaways({ summary }) {
             <b>{fmt.int(summary.ai_cert_holders)}</b> hold one of the AI credentials (AAIA, AAISM or AAIR).
           </Take>
         )}
-        <Take head="Renewal" figure={fmt.int(summary.renewal_due)} line="memberships end on or before 31 December">
-          That is <b>{fmt.pct(summary.renewal_due_share)}</b>, which makes the weeks before it the window for a renewal push.
-        </Take>
       </div>
     </>
   );
@@ -188,10 +185,6 @@ export default function Overview({ meta, summary }) {
   // The last twelve whole months; the newest month in the data is only part of one.
   const lastYear = months ? months.rows.slice(-13, -1).map((r) => r.members) : null;
   const s = summary || {};
-  const groups = seniority ? seniority.rows : [];
-  const leaders = groups.filter((r) => ['C-suite and executives', 'Directors, managers and consultants'].includes(r.category));
-  const everyone = seniority ? seniority.total : 0;
-  const leaderCount = leaders.reduce((n, r) => n + r.members, 0);
 
   return (
     <section className="wf-pane" id="overview">
@@ -212,12 +205,6 @@ export default function Overview({ meta, summary }) {
           visual={<MiniCols rows={tenure && tenure.rows} />}>
           from under 1 year, left, to 20 or more, right
         </Kpi>
-        {!values.seniority && (
-          <Kpi label="In leadership roles" value={seniority && everyone ? fmt.pct((100 * leaderCount) / everyone) : '—'}
-            visual={<Meter value={seniority && everyone ? (100 * leaderCount) / everyone : null} />}>
-            {seniority ? fmt.int(leaderCount) : '—'} executives, directors, managers and consultants
-          </Kpi>
-        )}
       </div>
 
       {meta.has_movement && <Movement />}
