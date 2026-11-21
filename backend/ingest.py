@@ -5,6 +5,7 @@ Usage:
         [--new raw/NewChapterMembers_041.xlsx --inbound raw/InboundChapterTransfer.xlsx \\
          --outbound raw/OutboundChapterTransfer.xlsx] [--db data/members.db] [--keep-reports] [--truncate]
     python -m backend.ingest --clear [--db data/members.db]
+    python -m backend.ingest --add-views [--db data/members.db]
 
 Each run adds one report to the history; it does not replace what is there, unless --truncate
 is given, which empties the database and loads the report as the only one. --clear empties it and stops. Members are
@@ -78,6 +79,19 @@ CREATE VIEW members AS
 CREATE VIEW member_certs AS
     SELECT vc.version_id AS member_id, vc.cert AS cert
     FROM version_certs vc JOIN current c ON c.version_id = vc.version_id;
+"""
+
+# A readable view of the de-identified data: today's members, one row each, with their credentials listed.
+# It carries no member key. Added to an existing database the next time the loader opens it.
+VIEWS = """
+CREATE VIEW IF NOT EXISTS deidentified_members AS
+    SELECT m.id AS row_no, m.seniority, m.job_function, m.professional_area, m.member_level, m.member_type, m.gender,
+           m.employer, m.city, m.zip, m.county, m.region,
+           CASE m.in_florida WHEN 1 THEN 'Yes' ELSE 'No' END AS florida_address,
+           substr(m.join_date, 1, 7) AS joined_month, substr(m.expiry_date, 1, 7) AS membership_ends_month,
+           m.tenure_years, m.tenure_band, m.n_certs AS credentials_held,
+           (SELECT group_concat(cert, ', ') FROM (SELECT c.cert FROM member_certs c WHERE c.member_id = m.id ORDER BY c.cert)) AS credentials
+    FROM members m;
 """
 
 # What a version row holds, besides its key and dates. A difference in any of these starts a new version.
@@ -262,8 +276,10 @@ def open_db(db_path, key, check_key=True):
     con.row_factory = sqlite3.Row
     if fresh:
         con.executescript(SCHEMA)
+        con.executescript(VIEWS)
         con.execute("INSERT INTO meta VALUES ('key_fingerprint', ?)", [privacy.fingerprint(key)])
         con.commit()
+    con.executescript(VIEWS)
     if not check_key:
         return con
     found = con.execute("SELECT value FROM meta WHERE key = 'key_fingerprint'").fetchone()
@@ -455,6 +471,7 @@ def main():
     parser.add_argument("--truncate", action="store_true",
                         help="truncate and load: empty the database, then load these reports as the only ones in it")
     parser.add_argument("--clear", action="store_true", help="empty the database and stop; give no reports")
+    parser.add_argument("--add-views", action="store_true", help="add the deidentified_members view to an existing database and stop")
     parser.add_argument("--new", help="New Member report (.xlsx)")
     parser.add_argument("--inbound", help="Transfer IN report (.xlsx)")
     parser.add_argument("--outbound", help="Transfer OUT report (.xlsx)")
@@ -465,6 +482,14 @@ def main():
     args = parser.parse_args()
 
     given = [args.new, args.inbound, args.outbound]
+    if args.add_views:
+        if not pathlib.Path(args.db).exists():
+            parser.error("there is no database at %s" % args.db)
+        con = sqlite3.connect(args.db)
+        con.executescript(VIEWS)
+        con.close()
+        print("Added the view deidentified_members to %s. Try: SELECT * FROM deidentified_members LIMIT 10;" % args.db)
+        return
     if args.clear:
         if args.roster or any(given) or args.truncate:
             parser.error("--clear empties the database and loads nothing; to empty it and load, use --truncate with the reports")

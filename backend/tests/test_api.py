@@ -319,3 +319,15 @@ def test_an_empty_database_is_reported_plainly(tmp_path, monkeypatch):
     answer = TestClient(main.app).get("/api/summary")
     check.assertEqual(answer.status_code, 503)
     check.assertIn("empty", answer.json()["detail"])
+
+
+def test_the_view_of_deidentified_data(client):
+    _, db_path = client
+    con = sqlite3.connect(db_path)
+    columns = [r[1] for r in con.execute("SELECT * FROM pragma_table_info('deidentified_members')")]
+    check.assertNotIn("pid", columns)
+    check.assertFalse(set(columns) & {"name", "first_name", "last_name", "email", "phone", "address", "member_id", "title"})
+    rows = con.execute("SELECT joined_month, membership_ends_month, credentials, credentials_held, florida_address FROM deidentified_members ORDER BY credentials_held DESC, joined_month").fetchall()
+    check.assertEqual(len(rows), 6)
+    check.assertEqual(rows[0], ("2026-10", "2026-12", "CISA, CISM", 2, "Yes"))
+    check.assertEqual(sum(1 for r in rows if r[4] == "No"), 1)

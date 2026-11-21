@@ -37,6 +37,18 @@ computer: no report, and nothing from one, is sent anywhere.
 | Display floor | The site lists an employer or city only at five or more of the members shown, and shows nothing when the filters select fewer than five. |
 | Reports deleted | The report files are deleted after a successful load. |
 
+To look at what is stored, open the database read-only and query the view
+`deidentified_members`: one row per current member, with credentials listed and no member key.
+
+```sh
+sqlite3 -readonly data/members.db
+```
+
+```sql
+.mode box
+SELECT * FROM deidentified_members LIMIT 10;
+```
+
 What this does not do:
 
 - **The database is not anonymous.** Almost every row is still unique on what an outsider
