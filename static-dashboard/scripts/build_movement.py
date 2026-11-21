@@ -35,8 +35,10 @@ for day in pd.date_range(START, AS_OF, freq="D"):
     n, i, o = count(new), count(inb), count(outb)
     rows.append({"date": day.strftime("%Y-%m-%d"), "month": day.strftime("%Y-%m"),
                  "new_members": n, "transferred_in": i, "transferred_out": o})
-assert sum(r["new_members"] for r in rows) == len(new), "a new member falls outside the 90 days"
-assert sum(r["transferred_in"] for r in rows) == len(inb) and sum(r["transferred_out"] for r in rows) == len(outb)
+if sum(r["new_members"] for r in rows) != len(new):
+    raise SystemExit("A new member falls outside the 90 days the report covers")
+if sum(r["transferred_in"] for r in rows) != len(inb) or sum(r["transferred_out"] for r in rows) != len(outb):
+    raise SystemExit("A transfer falls outside the 90 days the report covers")
 
 TYPES = {"Professional Membership": "Professional", "Student Membership": "Student", "Recent Graduate Membership": "Recent graduate"}
 short = lambda c: re.sub(r"\s+Chapter$", "", str(c).strip())

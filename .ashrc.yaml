@@ -1,0 +1,5 @@
+# Settings for ASH, the AWS Automated Security Helper. See "Security scan" in README.md.
+# Nothing is suppressed. To accept a finding, add it under global_settings.suppressions with a reason.
+project_name: westfloridaisaca
+global_settings:
+  severity_threshold: MEDIUM

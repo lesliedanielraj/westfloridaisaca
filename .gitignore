@@ -1,15 +1,49 @@
-# Member data never goes in this repository.
-# raw/ holds the ISACA reports, data/ the count tables made from them,
-# dist/ the built dashboard, which has those tables inlined.
+# Member data never goes in this repository. The "No member data" check in
+# .github/workflows/ash.yml fails any pull request that tries.
+
+# The ISACA reports, the database made from them, and anything built or exported from either.
 raw/
 data/
 dist/
 *.xlsx
 *.xls
+*.xlsm
 *.csv
+*.tsv
+*.parquet
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.bak
+*.dump
 
+# Bundles and archives, which can carry a database inside them.
+*.zip
+*.tgz
+*.tar
+*.tar.gz
+*.7z
+
+# Keys and local settings. The pseudonym key belongs in the keychain, not in a file here.
+.env
+.env.*
+*.key
+*.pem
+
+# ISACA's credential logos are added locally, not published here.
+frontend/src/assets/credentials/*
+!frontend/src/assets/credentials/README.md
+
+# Tools' own files.
 __pycache__/
 *.pyc
+.pytest_cache/
 .venv/
 node_modules/
+.ash/ash_output/
+.idea/
+.vscode/
 .DS_Store
