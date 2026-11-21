@@ -275,3 +275,47 @@ def test_reports_are_deleted_after_loading(tmp_path, monkeypatch):
     ingest.main()
     check.assertFalse(path.exists())
     check.assertEqual(sqlite3.connect(tmp_path / "members.db").execute("SELECT COUNT(*) FROM members").fetchone()[0], 4)
+
+
+def test_truncate_and_load_and_clear(tmp_path):
+    db_path = tmp_path / "members.db"
+    add_month(db_path, roster_file(tmp_path / "m1.xlsx", "11/18/2026", MONTH_1))
+    add_month(db_path, roster_file(tmp_path / "m2.xlsx", "12/18/2026", MONTH_1[:3]))
+    counts = {
+        "loads": "SELECT COUNT(*) FROM loads", "versions": "SELECT COUNT(*) FROM versions", "changes": "SELECT COUNT(*) FROM changes",
+        "members": "SELECT COUNT(*) FROM members", "current": "SELECT COUNT(*) FROM current", "meta": "SELECT COUNT(*) FROM meta",
+        "version_certs": "SELECT COUNT(*) FROM version_certs", "movements": "SELECT COUNT(*) FROM movements", "zips": "SELECT COUNT(*) FROM zips",
+    }
+    count = lambda table: sqlite3.connect(db_path).execute(counts[table]).fetchone()[0]
+    # Five rows: the four members, and a second row for the one whose employer fell under the floor when a colleague left.
+    check.assertEqual((count("loads"), count("versions"), count("changes")), (2, 5, 1))
+
+    # Truncate and load: an older report is fine, and so is a new key, because nothing is left to match it to.
+    path = roster_file(tmp_path / "again.xlsx", "10/18/2026", MONTH_1[:2])
+    as_of, members, now, zips, top, figures = ingest.read_roster(path, bytes(32), k=2)
+    done = ingest.load(db_path, bytes(32), path, as_of, members, now, zips, top, figures, truncate=True)
+    check.assertEqual((done["first"], count("loads"), count("versions"), count("changes"), count("members")), (True, 1, 2, 0, 2))
+
+    # A truncate and load that fails part-way leaves the old data in place.
+    later = roster_file(tmp_path / "later.xlsx", "11/18/2026", MONTH_1)
+    as_of, members, now, zips, top, figures = ingest.read_roster(later, bytes(32), k=2)
+    with check.assertRaises(KeyError):
+        ingest.load(db_path, bytes(32), later, as_of, members, now.iloc[:0], zips, top, figures, truncate=True)
+    check.assertEqual((count("loads"), count("members")), (1, 2))
+
+    removed = ingest.clear_db(db_path)
+    check.assertEqual((removed["loads"], removed["member rows"]), (1, 2))
+    check.assertEqual([count(t) for t in ("loads", "versions", "current", "version_certs", "changes", "movements", "zips", "meta")], [0] * 8)
+    check.assertEqual(ingest.clear_db(tmp_path / "missing.db"), None)
+    add_month(db_path, roster_file(tmp_path / "fresh.xlsx", "11/18/2026", MONTH_1))  # an empty database loads normally
+    check.assertEqual(count("members"), 4)
+
+
+def test_an_empty_database_is_reported_plainly(tmp_path, monkeypatch):
+    db_path = tmp_path / "members.db"
+    add_month(db_path, roster_file(tmp_path / "m1.xlsx", "11/18/2026", MONTH_1))
+    ingest.clear_db(db_path)
+    monkeypatch.setattr(main, "DB_PATH", db_path)
+    answer = TestClient(main.app).get("/api/summary")
+    check.assertEqual(answer.status_code, 503)
+    check.assertIn("empty", answer.json()["detail"])

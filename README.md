@@ -60,6 +60,17 @@ What this does not do:
 2. Run `./load-month.command` (or the `python -m backend.ingest` line under "Run it").
 3. Restart the website.
 
+To start over instead of adding a month:
+
+| Command | What it does |
+|---|---|
+| `python -m backend.ingest --truncate --roster ...` (or `./load-month.command --truncate`) | Truncate and load: empties the database and loads these reports as the only ones in it, in one step. If the load is refused, the old data stays. |
+| `python -m backend.ingest --clear` (or `./clear-data.command`, which asks first) | Empties the database and loads nothing. The site then says the database is empty. |
+
+Both remove the history, so month-to-month changes start again from the next report, and
+both rewrite the file so deleted rows are gone from it, not just marked free. A cleared
+database accepts any key, so this is also how to start again after losing the key.
+
 Each load adds to the history. It records who joined, left and rejoined since the last
 report, who renewed, who gained a credential, and whose county, employer, level or
 seniority changed. A roster already loaded, or one dated no later than the last, is

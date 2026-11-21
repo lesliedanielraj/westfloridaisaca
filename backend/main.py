@@ -39,6 +39,8 @@ def db():
     con = sqlite3.connect("file:%s?mode=ro" % DB_PATH, uri=True, check_same_thread=False)
     con.row_factory = sqlite3.Row
     try:
+        if not con.execute("SELECT COUNT(*) FROM meta WHERE key = 'as_of'").fetchone()[0]:
+            raise HTTPException(503, "The database is empty. Load a month's reports: python -m backend.ingest --roster <report.xlsx>")
         yield con
     finally:
         con.close()

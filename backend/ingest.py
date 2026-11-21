@@ -3,9 +3,11 @@
 Usage:
     python -m backend.ingest --roster raw/MemberRoster_041.xlsx \\
         [--new raw/NewChapterMembers_041.xlsx --inbound raw/InboundChapterTransfer.xlsx \\
-         --outbound raw/OutboundChapterTransfer.xlsx] [--db data/members.db] [--keep-reports]
+         --outbound raw/OutboundChapterTransfer.xlsx] [--db data/members.db] [--keep-reports] [--truncate]
+    python -m backend.ingest --clear [--db data/members.db]
 
-Each run adds one report to the history; it does not replace what is there. Members are
+Each run adds one report to the history; it does not replace what is there, unless --truncate
+is given, which empties the database and loads the report as the only one. --clear empties it and stops. Members are
 matched from month to month by a keyed hash of their ISACA member ID (see privacy.py), and
 the run records who joined, who left, and what changed for those who stayed.
 
@@ -242,8 +244,9 @@ def file_hash(path):
     return hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest()
 
 
-def open_db(db_path, key):
-    """The database, created on first use. Refuses a key other than the one the history was made with."""
+def open_db(db_path, key, check_key=True):
+    """The database, created on first use. Refuses a key other than the one the history was made with,
+    unless `check_key` is off because the history is about to be cleared."""
     db_path = pathlib.Path(db_path)
     db_path.parent.mkdir(parents=True, exist_ok=True)
     if db_path.exists():
@@ -261,7 +264,14 @@ def open_db(db_path, key):
         con.executescript(SCHEMA)
         con.execute("INSERT INTO meta VALUES ('key_fingerprint', ?)", [privacy.fingerprint(key)])
         con.commit()
-    known = con.execute("SELECT value FROM meta WHERE key = 'key_fingerprint'").fetchone()[0]
+    if not check_key:
+        return con
+    found = con.execute("SELECT value FROM meta WHERE key = 'key_fingerprint'").fetchone()
+    if found is None:  # a cleared database: it takes whichever key loads it next
+        set_meta(con, "key_fingerprint", privacy.fingerprint(key))
+        con.commit()
+        return con
+    known = found[0]
     stand_in = con.execute("SELECT COUNT(*) FROM meta WHERE key = 'stand_in'").fetchone()[0]
     if known != privacy.fingerprint(key) and stand_in:
         # Built elsewhere with a throwaway key, to show the site working. It has no history worth keeping.
@@ -277,17 +287,70 @@ def open_db(db_path, key):
     return con
 
 
+CLEAR = ("changes", "current", "version_certs", "versions", "movements", "zips", "loads", "meta")
+
+
+def clear(con):
+    """Empty every table, keeping the tables themselves. Returns how many rows each held.
+    The caller commits; `scrub` then removes the emptied pages from the file."""
+    removed = {
+        "loads": con.execute("SELECT COUNT(*) FROM loads").fetchone()[0],
+        "member rows": con.execute("SELECT COUNT(*) FROM versions").fetchone()[0],
+        "changes": con.execute("SELECT COUNT(*) FROM changes").fetchone()[0],
+        "joins and transfers": con.execute("SELECT COUNT(*) FROM movements").fetchone()[0],
+    }
+    con.execute("DELETE FROM changes")
+    con.execute("DELETE FROM current")
+    con.execute("DELETE FROM version_certs")
+    con.execute("DELETE FROM versions")
+    con.execute("DELETE FROM movements")
+    con.execute("DELETE FROM zips")
+    con.execute("DELETE FROM loads")
+    con.execute("DELETE FROM meta")
+    return removed
+
+
+def scrub(db_path):
+    """Rewrite the file so that rows deleted from it are gone from the file too, not just marked free."""
+    con = sqlite3.connect(db_path)
+    con.execute("VACUUM")
+    con.close()
+
+
+def clear_db(db_path):
+    """The --clear command: empty the database. Needs no key, since nothing is read or matched."""
+    db_path = pathlib.Path(db_path)
+    if not db_path.exists():
+        return None
+    con = sqlite3.connect(db_path)
+    if not con.execute("SELECT COUNT(*) FROM sqlite_master WHERE name = 'loads'").fetchone()[0]:
+        con.close()
+        db_path.unlink()  # an old single-report database has no tables worth keeping
+        return {"loads": 1}
+    con.execute("PRAGMA secure_delete = ON")
+    removed = clear(con)
+    con.commit()
+    con.close()
+    scrub(db_path)
+    return removed
+
+
 def set_meta(con, key, value):
     con.execute("INSERT INTO meta VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", [key, value])
 
 
 def load(db_path, key, roster_path, as_of, members, now, zips, top_counties, figures, movements=None, movement_as_of=None,
-         stand_in=False):
-    """Add one roster to the history and record what changed since the last one. All or nothing."""
-    con = open_db(db_path, key)
+         stand_in=False, truncate=False):
+    """Add one roster to the history and record what changed since the last one. All or nothing.
+    With `truncate`, the history is emptied first, in the same step: if the load is refused, the old data stays."""
+    con = open_db(db_path, key, check_key=not truncate)
     try:
         report = iso(as_of)
         digest = file_hash(roster_path)
+        if truncate:
+            con.execute("PRAGMA secure_delete = ON")
+            clear(con)
+            set_meta(con, "key_fingerprint", privacy.fingerprint(key))
         latest = con.execute("SELECT MAX(report_date) FROM loads").fetchone()[0]
         if con.execute("SELECT COUNT(*) FROM loads WHERE file_sha256 = ?", [digest]).fetchone()[0]:
             raise privacy.PrivacyError("This roster file has already been loaded")
@@ -360,6 +423,9 @@ def load(db_path, key, roster_path, as_of, members, now, zips, top_counties, fig
             set_meta(con, "movement_from", iso(movement_as_of - pd.Timedelta(days=90)))
             set_meta(con, "movement_to", iso(movement_as_of))
         con.commit()
+        if truncate:
+            con.close()
+            scrub(db_path)
         return dict(counts, members=len(members), movements=added, first=first)
     except Exception:
         con.rollback()
@@ -385,7 +451,10 @@ def describe_change(note, pid, was, values):
 
 def main():
     parser = argparse.ArgumentParser(description="Add one month's ISACA chapter reports to the site's database.")
-    parser.add_argument("--roster", required=True, help="Member Roster - Full report (.xlsx)")
+    parser.add_argument("--roster", help="Member Roster - Full report (.xlsx)")
+    parser.add_argument("--truncate", action="store_true",
+                        help="truncate and load: empty the database, then load these reports as the only ones in it")
+    parser.add_argument("--clear", action="store_true", help="empty the database and stop; give no reports")
     parser.add_argument("--new", help="New Member report (.xlsx)")
     parser.add_argument("--inbound", help="Transfer IN report (.xlsx)")
     parser.add_argument("--outbound", help="Transfer OUT report (.xlsx)")
@@ -396,6 +465,18 @@ def main():
     args = parser.parse_args()
 
     given = [args.new, args.inbound, args.outbound]
+    if args.clear:
+        if args.roster or any(given) or args.truncate:
+            parser.error("--clear empties the database and loads nothing; to empty it and load, use --truncate with the reports")
+        removed = clear_db(args.db)
+        if removed is None:
+            print("There is no database at %s, so there is nothing to clear." % args.db)
+        else:
+            print("Cleared %s: %s. The tables are kept, empty, and the file was rewritten so the rows are gone from it."
+                  % (args.db, ", ".join("%d %s" % (n, name) for name, n in removed.items())))
+        return
+    if not args.roster:
+        parser.error("give --roster, or --clear to empty the database")
     if any(given) and not all(given):
         parser.error("--new, --inbound and --outbound go together: give all three or none")
 
@@ -403,12 +484,14 @@ def main():
         key = privacy.load_key()
         as_of, members, now, zips, top, figures = read_roster(args.roster, key)
         movement_as_of, movements = read_movements(*given, key) if all(given) else (None, None)
-        done = load(args.db, key, args.roster, as_of, members, now, zips, top, figures, movements, movement_as_of, args.stand_in)
+        done = load(args.db, key, args.roster, as_of, members, now, zips, top, figures, movements, movement_as_of, args.stand_in, args.truncate)
     except privacy.PrivacyError as err:
         raise SystemExit("Load refused, nothing was stored.\n%s" % err)
 
-    print("Loaded %s into %s: %d members." % (iso(as_of), args.db, done["members"]))
-    if done["first"]:
+    print("%s %s into %s: %d members." % ("Emptied the database and loaded" if args.truncate else "Loaded", iso(as_of), args.db, done["members"]))
+    if args.truncate:
+        print("The earlier history was removed, so month-to-month changes start again from this report.")
+    elif done["first"]:
         print("This is the first report, so there is nothing to compare it with yet.")
     else:
         print("Since the last report: %(joined)d joined, %(left)d left, %(rejoined)d rejoined, %(changed)d changed." % done)
