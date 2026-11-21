@@ -8,13 +8,18 @@ const POWERED_LOGO = (brandFile(false) || [])[1];
 const POWERED_LOGO_DARK = (brandFile(true) || [])[1];
 
 // "Powered by Adhvitech LLC", with the logo when there is one. `compact` shows the logo alone, for the collapsed pane.
+const POWERED_URL = 'https://adhvitech.com/';
+
 export function PoweredBy({ compact }) {
   return (
-    <div className={`wf-powered${compact ? ' wf-powered-compact' : ''}`} title="Powered by Adhvitech LLC">
+    <div className={`wf-powered${compact ? ' wf-powered-compact' : ''}`}>
       <span className="wf-powered-by">Powered by</span>
-      {POWERED_LOGO && <img className={`wf-powered-logo${POWERED_LOGO_DARK ? ' wf-only-light' : ''}`} src={POWERED_LOGO} alt="" />}
-      {POWERED_LOGO_DARK && <img className="wf-powered-logo wf-only-dark" src={POWERED_LOGO_DARK} alt="" />}
-      <span className="wf-powered-name">Adhvitech LLC</span>
+      <a className="wf-powered-link" href={POWERED_URL} target="_blank" rel="noopener noreferrer"
+        title="Adhvitech LLC: opens adhvitech.com in a new tab" aria-label="Adhvitech LLC (opens adhvitech.com in a new tab)">
+        {POWERED_LOGO && <img className={`wf-powered-logo${POWERED_LOGO_DARK ? ' wf-only-light' : ''}`} src={POWERED_LOGO} alt="" />}
+        {POWERED_LOGO_DARK && <img className="wf-powered-logo wf-only-dark" src={POWERED_LOGO_DARK} alt="" />}
+        <span className="wf-powered-name">Adhvitech LLC</span>
+      </a>
     </div>
   );
 }

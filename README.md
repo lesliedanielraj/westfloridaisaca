@@ -270,7 +270,8 @@ colours to `frontend/src/styles.css` and its name to `ACCENTS` in `frontend/src/
 
 ## Credit line
 
-"Powered by Adhvitech LLC" appears at the foot of the navigation pane and of every page.
+"Powered by Adhvitech LLC" appears at the foot of the navigation pane and of every page,
+linked to <https://adhvitech.com/>.
 To show the Adhvitech logo beside it, put the file in `frontend/src/assets/brand/` (see the
 README there) and rebuild.
 
