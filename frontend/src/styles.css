@@ -337,3 +337,18 @@ button.wf-chip { cursor: pointer; }
 .wf-cred-logo { height: 44px; width: auto; max-width: 120px; object-fit: contain; margin-top: 8px; }
 .wf-cred-logo-small { height: 26px; max-width: 64px; margin: 0; flex: 0 0 auto; }
 .wf-cred-name { display: flex; align-items: center; gap: 8px; min-width: 0; }
+
+/* Joining and renewal */
+.wf-renew { display: flex; flex-wrap: wrap; align-items: center; gap: var(--cds-gap-lg); flex: 1 1 auto; }
+.wf-bigring { width: 172px; height: 172px; flex: 0 0 auto; margin: 0 auto; }
+.wf-bigring .wf-ring-track, .wf-bigring .wf-ring-fill { stroke-width: 12; }
+.wf-bigring-num { fill: var(--color-fg); font-family: var(--font-anthropic-sans); font-size: 24px; font-weight: 500; }
+.wf-bigring-cap { fill: var(--cds-text-secondary); font-family: var(--font-anthropic-sans); font-size: 11px; }
+.wf-renew-facts { flex: 1 1 220px; display: flex; flex-direction: column; gap: var(--cds-gap-sm); line-height: 1.45; }
+.wf-renew-facts b { font-size: 1.25rem; font-weight: 500; margin-right: 2px; }
+.wf-renew-days { color: var(--color-fg-muted); }
+.wf-renew-days b { color: var(--color-fg); }
+.wf-meterlist { display: grid; grid-template-columns: minmax(84px, 36%) minmax(60px, 1fr) auto; column-gap: var(--cds-gap-md); row-gap: 12px; align-items: center; font-size: var(--cds-font-size-caption); margin-top: var(--cds-gap-sm); }
+.wf-meter-tall { height: 10px; border-radius: 5px; }
+.wf-meter-tall i { border-radius: 5px; min-width: 3px; }
+.wf-meterlist .wf-bar-val b { color: var(--color-fg); }

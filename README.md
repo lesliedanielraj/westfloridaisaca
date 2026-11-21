@@ -94,6 +94,7 @@ Interactive documentation is at <http://127.0.0.1:8000/docs> while the server ru
 | `GET /api/counties`, `/api/zips`, `/api/cities` | Members by home county, ZIP code and city |
 | `GET /api/region-function` | Members by home region and job function |
 | `GET /api/joins/year`, `/api/joins/month` | Current members by when they joined |
+| `GET /api/renewal/{dimension}` | Members who have already renewed into next year, by `tenure`, `seniority` or `member_level` |
 | `GET /api/employers` | Employers with three or more of the selected members |
 | `GET /api/movement?month=YYYY-MM` | Who joined and left over the 90 days the reports cover |
 

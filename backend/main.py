@@ -207,6 +207,35 @@ def breakdown(dimension: str, con=Depends(selected)):
     return {"dimension": dimension, "total": n, "rows": ordered(found, order)}
 
 
+# Who has already renewed, split one way. One complete statement per dimension, as above.
+RENEWAL_BY = {
+    "tenure": ("""SELECT m.tenure_band AS category, COUNT(*) AS members, COALESCE(SUM(m.expiry_date > :year_end), 0) AS renewed
+                  FROM sel m WHERE m.tenure_band IS NOT NULL GROUP BY category""", classify.TENURE_BANDS),
+    "seniority": ("""SELECT m.seniority AS category, COUNT(*) AS members, COALESCE(SUM(m.expiry_date > :year_end), 0) AS renewed
+                     FROM sel m GROUP BY category""", classify.SENIORITY),
+    "member_level": ("""SELECT m.member_level AS category, COUNT(*) AS members, COALESCE(SUM(m.expiry_date > :year_end), 0) AS renewed
+                        FROM sel m WHERE m.member_level IS NOT NULL GROUP BY category""", classify.MEMBER_LEVELS),
+}
+
+
+@app.get("/api/renewal/{dimension}")
+def renewal_by(dimension: str, con=Depends(selected)):
+    """Members whose membership already runs past 31 December of the report year, by tenure, seniority or
+    member level. `renewed_share` is a percentage of that row's members."""
+    if dimension not in RENEWAL_BY:
+        raise HTTPException(404, "Unknown dimension. Choose one of: " + ", ".join(RENEWAL_BY))
+    sql, order = RENEWAL_BY[dimension]
+    as_of = dt.date.fromisoformat(meta(con)["as_of"])
+    year_end = dt.date(as_of.year, 12, 31)
+    found = [dict(r, due=r["members"] - r["renewed"], renewed_share=share(r["renewed"], r["members"]))
+             for r in rows(con, sql, {"year_end": str(year_end)})]
+    n = total(con)
+    renewed = con.execute("SELECT COALESCE(SUM(m.expiry_date > ?), 0) FROM sel m", [str(year_end)]).fetchone()[0]
+    return {"dimension": dimension, "year": as_of.year, "year_end": str(year_end), "days_left": (year_end - as_of).days,
+            "total": n, "renewed": renewed, "due": n - renewed, "renewed_share": share(renewed, n),
+            "rows": ordered(found, order)}
+
+
 @app.get("/api/certifications")
 def certifications(con=Depends(selected)):
     """Members holding each ISACA credential. A member with several counts under each."""

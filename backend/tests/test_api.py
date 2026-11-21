@@ -153,3 +153,14 @@ def test_filter_values_are_data_not_sql(client):
             check.assertEqual(answer.json()["members"], (6 if name == "exclude" else 0))
     check.assertEqual(api.get("/api/breakdown/seniority; DROP TABLE members").status_code, 404)
     check.assertEqual(sqlite3.connect(db_path).execute("SELECT COUNT(*) FROM members").fetchone()[0], 6)
+
+
+def test_renewal_by_group(client):
+    api, _ = client
+    r = api.get("/api/renewal/seniority").json()
+    # Every made-up member's membership ends on 31 December of the report year, so nobody has renewed.
+    check.assertEqual((r["total"], r["renewed"], r["due"], r["renewed_share"]), (6, 0, 6, 0.0))
+    check.assertEqual((r["year"], r["days_left"]), (2026, 43))
+    check.assertEqual([x["category"] for x in r["rows"]][:2], ["C-suite and executives", "Directors, managers and consultants"])
+    check.assertEqual(sum(x["members"] for x in r["rows"]), 6)
+    check.assertEqual(api.get("/api/renewal/shoe_size").status_code, 404)
