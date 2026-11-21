@@ -6,18 +6,23 @@ Every /api endpoint that describes members takes the same optional filters, whic
 combine: seniority, county, job_function and credential. Each returns counts, never
 a member row. All SQL here is fixed text; caller input is only ever bound as a value.
 """
+import collections
 import datetime as dt
 import json
 import os
 import pathlib
 import sqlite3
 import statistics
+import time
 from typing import Optional
+from urllib.parse import urlparse
 
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request, Response
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
 
-from . import classify, privacy
+from . import accounts, classify, privacy
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 DB_PATH = pathlib.Path(os.environ.get("MEMBERS_DB", ROOT / "data" / "members.db"))
@@ -28,7 +33,123 @@ MIN_GROUP = privacy.K
 # A set of filters that selects fewer members than this (but not none) shows nothing at all.
 MIN_SELECTION = privacy.K
 
-app = FastAPI(title="West Florida ISACA Member Insights API", version="1.0.0")
+# The interactive documentation pages are off: they would describe the API to anyone who could reach the server.
+# A signed-in user can read the same description at /api/openapi.json.
+app = FastAPI(title="West Florida ISACA Member Insights API", version="1.1.0", docs_url=None, redoc_url=None, openapi_url=None)
+
+
+# ---------------------------------------------------------------- who is asking
+
+COOKIE = "wf_session"
+# Routes anyone may call. Every other /api route needs a signed-in user: test_every_route_needs_sign_in
+# fails if a route is added that answers without one and is not listed here.
+PUBLIC = {"/api/health", "/api/auth/login", "/api/auth/logout", "/api/auth/me"}
+SIGN_IN_TRIES = 10       # per address, per minute
+_tries = collections.defaultdict(collections.deque)
+
+HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=()",
+    "Cross-Origin-Opener-Policy": "same-origin",
+    "Cross-Origin-Resource-Policy": "same-origin",
+    "Cross-Origin-Embedder-Policy": "require-corp",
+    # Scripts, styles, fonts and data only from this site, and nothing written inline in a page.
+    "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
+                               "font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; "
+                               "frame-ancestors 'none'",
+}
+
+
+@app.middleware("http")
+async def guard(request: Request, call_next):
+    """Refuse a change that another site asked this browser to make, and add the security headers to every answer."""
+    if request.method not in ("GET", "HEAD", "OPTIONS"):
+        origin = request.headers.get("origin")
+        if origin and urlparse(origin).netloc != request.headers.get("host"):
+            return JSONResponse({"detail": "This request came from another site"}, status_code=403, headers=HEADERS)
+    response = await call_next(request)
+    if response.status_code == 405 and "allow" not in response.headers:
+        response.headers["Allow"] = "POST" if request.url.path in ("/api/auth/login", "/api/auth/logout") else "GET"
+    for name, value in HEADERS.items():
+        response.headers.setdefault(name, value)
+    # Built files carry a fingerprint in their name, so a browser may keep them. Nothing else is kept anywhere.
+    if request.url.path.startswith("/assets/") and response.status_code == 200:
+        response.headers["Cache-Control"] = "private, max-age=31536000, immutable"
+    else:
+        response.headers["Cache-Control"] = "no-store"
+    if request.url.scheme == "https":
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
+
+
+def account_db():
+    con = accounts.connect()
+    try:
+        yield con
+    finally:
+        con.close()
+
+
+def current_user(request: Request, con=Depends(account_db)):
+    """The signed-in user, or a 401 that tells the site to show the sign-in page."""
+    user = accounts.user_for(con, request.cookies.get(COOKIE))
+    if user is None:
+        raise HTTPException(401, "Sign in to continue")
+    return user
+
+
+SIGN_IN_NEEDED = {401: {"description": "Not signed in, or the session has ended"}}
+NOT_FOUND = {404: {"description": "No such dimension, period or month"}}
+
+
+class SignIn(BaseModel):
+    email: str = Field(max_length=254)
+    password: str = Field(max_length=accounts.MAX_PASSWORD)
+
+
+@app.post("/api/auth/login", responses={401: {"description": "Wrong email or password, or the account is locked"}, 429: {"description": "Too many attempts from this address"}})
+def login(body: SignIn, request: Request, response: Response, con=Depends(account_db)):
+    """Sign in with an email and password. The answer sets the session cookie; it never says which of the two was wrong."""
+    recent = _tries[request.client.host if request.client else "unknown"]
+    moment = time.monotonic()
+    while recent and moment - recent[0] > 60:
+        recent.popleft()
+    if len(recent) >= SIGN_IN_TRIES:
+        raise HTTPException(429, "Too many attempts. Wait a minute and try again.")
+    recent.append(moment)
+    token = accounts.sign_in(con, body.email, body.password)
+    if token is None:
+        raise HTTPException(401, "The email or password is not right, or the account is locked. Try again in a few minutes.")
+    secure = request.url.scheme == "https" or os.environ.get("WF_SECURE_COOKIES") == "1"
+    response.set_cookie(COOKIE, token, max_age=accounts.SESSION_HOURS * 3600, httponly=True, samesite="strict", secure=secure, path="/")
+    return accounts.user_for(con, token)
+
+
+@app.post("/api/auth/logout")
+def logout(request: Request, response: Response, con=Depends(account_db)):
+    """End this session and clear its cookie."""
+    accounts.sign_out(con, request.cookies.get(COOKIE))
+    response.delete_cookie(COOKIE, path="/")
+    return {"signed_out": True}
+
+
+@app.get("/api/auth/me", responses=SIGN_IN_NEEDED)
+def me(user=Depends(current_user)):
+    """Who is signed in: their email and role. 401 if nobody is."""
+    return user
+
+
+# Everything about members hangs off this router, which lets nobody in without a session.
+data = APIRouter(prefix="/api", dependencies=[Depends(current_user)], responses={
+    **SIGN_IN_NEEDED, 503: {"description": "No member data has been loaded yet"}})
+
+
+@data.get("/openapi.json", include_in_schema=False)
+def api_description():
+    """The machine-readable description of this API, for signed-in users."""
+    return app.openapi()
 
 
 # ---------------------------------------------------------------- database
@@ -116,10 +237,11 @@ def ordered(items, order=None):
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "database": DB_PATH.exists()}
+    """Whether the server is up. Open to anyone, so it says nothing else."""
+    return {"status": "ok"}
 
 
-@app.get("/api/meta")
+@data.get("/meta")
 def get_meta(con=Depends(db)):
     """Report date and the values each filter can take."""
     m = meta(con)
@@ -138,7 +260,7 @@ def get_meta(con=Depends(db)):
     }
 
 
-@app.get("/api/summary")
+@data.get("/summary")
 def summary(con=Depends(selected)):
     """Headline counts for the members the filters select."""
     m = meta(con)
@@ -205,7 +327,7 @@ DIMENSIONS = {
 }
 
 
-@app.get("/api/breakdown/{dimension}")
+@data.get("/breakdown/{dimension}", responses=NOT_FOUND)
 def breakdown(dimension: str, con=Depends(selected)):
     """Members by category for one dimension. Shares are of the members the filters select."""
     if dimension not in DIMENSIONS:
@@ -232,7 +354,7 @@ RENEWAL_BY = {
 }
 
 
-@app.get("/api/renewal/{dimension}")
+@data.get("/renewal/{dimension}", responses=NOT_FOUND)
 def renewal_by(dimension: str, con=Depends(selected)):
     """Members whose membership already runs past 31 December of the report year, by tenure, seniority or
     member level. `renewed_share` is a percentage of that row's members."""
@@ -250,7 +372,7 @@ def renewal_by(dimension: str, con=Depends(selected)):
             "rows": ordered(found, order)}
 
 
-@app.get("/api/certifications")
+@data.get("/certifications")
 def certifications(con=Depends(selected)):
     """Members holding each ISACA credential. A member with several counts under each."""
     n = total(con)
@@ -259,7 +381,7 @@ def certifications(con=Depends(selected)):
     return {"total": n, "rows": [dict(r, share=share(r["holders"], n)) for r in found]}
 
 
-@app.get("/api/counties")
+@data.get("/counties")
 def counties(con=Depends(selected)):
     """Members by Florida county of their home ZIP code."""
     n = total(con)
@@ -269,7 +391,7 @@ def counties(con=Depends(selected)):
     return {"total": n, "rows": [dict(r, share=share(r["members"], n)) for r in found]}
 
 
-@app.get("/api/zips")
+@data.get("/zips")
 def zips(con=Depends(selected)):
     """Members by Florida home ZIP code, with each ZIP's centre point."""
     return {"rows": rows(con, """SELECT z.zip AS zip, z.place AS place, z.county AS county, z.lat AS lat, z.lon AS lon,
@@ -278,7 +400,7 @@ def zips(con=Depends(selected)):
                                  GROUP BY z.zip ORDER BY members DESC, z.zip""")}
 
 
-@app.get("/api/cities")
+@data.get("/cities")
 def cities(con=Depends(selected)):
     """Florida home cities with five or more of the selected members."""
     n = total(con)
@@ -287,7 +409,7 @@ def cities(con=Depends(selected)):
     return {"total": n, "rows": [dict(r, share=share(r["members"], n)) for r in found]}
 
 
-@app.get("/api/region-function")
+@data.get("/region-function")
 def region_function(con=Depends(selected)):
     """Members by home region (the six largest counties, the rest of Florida, outside Florida) and job function."""
     regions = meta(con)["top_counties"].split("|") + ["Other Florida", "Outside Florida"]
@@ -303,7 +425,7 @@ def region_function(con=Depends(selected)):
     return {"regions": [r for r in regions if any(o["region"] == r for o in out)], "functions": functions, "rows": out}
 
 
-@app.get("/api/joins/{by}")
+@data.get("/joins/{by}", responses=NOT_FOUND)
 def joins(by: str, con=Depends(selected)):
     """Current members by the year (from 2000) or month (last 24) they joined. Members who have
     since left are not counted, so this is not a growth trend."""
@@ -321,7 +443,7 @@ def joins(by: str, con=Depends(selected)):
     raise HTTPException(404, "Choose /api/joins/year or /api/joins/month")
 
 
-@app.get("/api/employers")
+@data.get("/employers")
 def employers(con=Depends(selected)):
     """Employers with five or more of the selected members, common name variants merged."""
     n = total(con)
@@ -330,7 +452,7 @@ def employers(con=Depends(selected)):
     return {"total": n, "rows": [dict(r, share=share(r["members"], n)) for r in found]}
 
 
-@app.get("/api/loads")
+@data.get("/loads")
 def loads(con=Depends(db)):
     """Each monthly report loaded, with what changed since the one before: who joined, left and rejoined,
     and how many members' details changed. The first report has nothing to compare with."""
@@ -338,14 +460,14 @@ def loads(con=Depends(db)):
                                  FROM loads ORDER BY report_date""")}
 
 
-@app.get("/api/changes")
+@data.get("/changes")
 def changes(con=Depends(db)):
     """Counts of changes between monthly reports, by kind and by the detail that changed. Counts only."""
     return {"rows": rows(con, """SELECT report_date, kind, COALESCE(field, '') AS field, COUNT(*) AS members
                                  FROM changes GROUP BY report_date, kind, field ORDER BY report_date, kind, field""")}
 
 
-@app.get("/api/movement")
+@data.get("/movement", responses=NOT_FOUND)
 def movement(month: Optional[str] = Query(None, description="A month as YYYY-MM; leave out for all 90 days"),
              con=Depends(db)):
     """Who joined and left the chapter over the 90 days the New Member and transfer reports cover.
@@ -387,5 +509,7 @@ def movement(month: Optional[str] = Query(None, description="A month as YYYY-MM;
 
 
 # The built React site, when present. Declared last so it never shadows /api.
+app.include_router(data)
+
 if SITE.exists():
     app.mount("/", StaticFiles(directory=SITE, html=True), name="site")

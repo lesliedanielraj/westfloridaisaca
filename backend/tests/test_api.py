@@ -2,6 +2,7 @@
 
 Run from the repository root:  python -m pytest backend
 """
+import secrets
 import sqlite3
 import unittest
 
@@ -9,11 +10,15 @@ import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
 
-from backend import classify, ingest, main, privacy
+from backend import accounts, classify, ingest, main, privacy
 
 TITLE = "ISACA Chapter Member Roster\nTest Chapter (999)\nas of 11/18/2026 08:00:00 PM Chicago Time"
 check = unittest.TestCase()  # assertEqual and friends; a failure shows both sides
 KEY = bytes(range(32))  # a fixed pseudonym key for the tests
+WHO = "board.member@example.org"
+OTHER = "someone@example.org"
+PHRASE = secrets.token_urlsafe(18)  # the test account's passphrase, made fresh on every run
+WRONG = "wrong " + PHRASE
 MARKER = "ZZ-PRIVATE"  # stands in for every personal detail; must never reach the database
 
 
@@ -67,8 +72,21 @@ def client(tmp_path_factory):
     patch.setattr(main, "DB_PATH", db_path)
     patch.setattr(main, "MIN_GROUP", 3)
     patch.setattr(main, "MIN_SELECTION", 1)
-    yield TestClient(main.app), db_path
+    yield signed_in(patch, folder), db_path
     patch.undo()
+
+
+def signed_in(patch, folder, role="member"):
+    """A browser-like client that has signed in as a made-up board member, with its own accounts database."""
+    patch.setattr(accounts, "DB_PATH", folder / "accounts.db")
+    main._tries.clear()
+    con = accounts.connect()
+    if not con.execute("SELECT 1 FROM users WHERE email = ?", [WHO]).fetchone():
+        accounts.add_user(con, WHO, PHRASE, role)
+    con.close()
+    api = TestClient(main.app)
+    check.assertEqual(api.post("/api/auth/login", json={"email": WHO, "password": PHRASE}).status_code, 200)
+    return api
 
 
 def roster_file(path, as_of, rows):
@@ -316,7 +334,7 @@ def test_an_empty_database_is_reported_plainly(tmp_path, monkeypatch):
     add_month(db_path, roster_file(tmp_path / "m1.xlsx", "11/18/2026", MONTH_1))
     ingest.clear_db(db_path)
     monkeypatch.setattr(main, "DB_PATH", db_path)
-    answer = TestClient(main.app).get("/api/summary")
+    answer = signed_in(monkeypatch, tmp_path).get("/api/summary")
     check.assertEqual(answer.status_code, 503)
     check.assertIn("empty", answer.json()["detail"])
 
@@ -331,3 +349,130 @@ def test_the_view_of_deidentified_data(client):
     check.assertEqual(len(rows), 6)
     check.assertEqual(rows[0], ("2026-10", "2026-12", "CISA, CISM", 2, "Yes"))
     check.assertEqual(sum(1 for r in rows if r[4] == "No"), 1)
+
+
+# ---------------------------------------------------------------- sign-in
+
+def test_every_route_needs_sign_in(client):
+    """The check a code scanner cannot make: no /api route answers a stranger unless it is on the public list."""
+    paths = {}
+    for route in list(main.app.routes) + list(main.data.routes):
+        if getattr(route, "methods", None) and route.path.startswith("/api"):
+            paths.setdefault(route.path, set()).update(route.methods - {"HEAD", "OPTIONS"})
+    # If a new router is ever added, its routes show up in the API's own description: make sure none escaped the list above.
+    described = set(main.app.openapi()["paths"])
+    check.assertTrue(described <= set(paths), "routes this test does not know about: %s" % sorted(described - set(paths)))
+    check.assertTrue(main.PUBLIC <= set(paths), "the public list names a route that does not exist")
+    check.assertGreater(len(paths), 15)
+    stranger = TestClient(main.app)
+    for path, methods in sorted(paths.items()):
+        if path in main.PUBLIC:
+            continue
+        url = path.replace("{dimension}", "seniority").replace("{by}", "year")
+        check.assertNotIn("{", url, "teach this test how to call %s" % path)
+        for method in methods:
+            answer = stranger.request(method, url)
+            check.assertEqual(answer.status_code, 401, "%s %s answered without a sign-in" % (method, path))
+    # The public routes give nothing away either.
+    check.assertEqual(stranger.get("/api/auth/me").status_code, 401)
+    check.assertEqual(stranger.get("/api/health").json(), {"status": "ok"})
+    for hidden in ("/docs", "/redoc", "/openapi.json"):
+        check.assertNotIn("openapi", stranger.get(hidden).text.lower())
+    check.assertEqual(stranger.get("/api/openapi.json").status_code, 401)
+    check.assertIn("/api/summary", client[0].get("/api/openapi.json").json()["paths"])
+
+
+def test_sign_in_and_out(tmp_path, monkeypatch):
+    api = signed_in(monkeypatch, tmp_path)
+    check.assertEqual(api.get("/api/auth/me").json(), {"email": WHO, "role": "member"})
+    stored = (tmp_path / "accounts.db").read_bytes()
+    check.assertNotIn(PHRASE.encode(), stored)                        # the passphrase is not kept
+    check.assertNotIn(api.cookies[main.COOKIE].encode(), stored)      # nor the session token, only its hash
+    check.assertIn(b"$argon2id$", stored)
+
+    fresh = TestClient(main.app)
+    answer = fresh.post("/api/auth/login", json={"email": WHO, "password": PHRASE})
+    cookie = answer.headers["set-cookie"].lower()
+    for flag in ("httponly", "samesite=strict", "path=/"):
+        check.assertIn(flag, cookie)
+
+    wrong = fresh.post("/api/auth/login", json={"email": WHO, "password": PHRASE + "x"})
+    unknown = fresh.post("/api/auth/login", json={"email": "you@example.org", "password": PHRASE})
+    check.assertEqual((wrong.status_code, unknown.status_code), (401, 401))
+    check.assertEqual(wrong.json(), unknown.json())                   # no hint which accounts exist
+
+    check.assertEqual(api.post("/api/auth/logout").json(), {"signed_out": True})
+    check.assertEqual(api.get("/api/auth/me").status_code, 401)
+    actions = [r[0] for r in sqlite3.connect(tmp_path / "accounts.db").execute("SELECT action FROM audit ORDER BY id")]
+    check.assertEqual(actions, ["account_created", "signed_in", "signed_in", "sign_in_failed", "sign_in_failed", "signed_out"])
+
+
+def test_wrong_passwords_lock_the_account(tmp_path, monkeypatch):
+    signed_in(monkeypatch, tmp_path)
+    api = TestClient(main.app)
+    for _ in range(accounts.MAX_FAILURES):
+        check.assertEqual(api.post("/api/auth/login", json={"email": WHO, "password": WRONG}).status_code, 401)
+    check.assertEqual(api.post("/api/auth/login", json={"email": WHO, "password": PHRASE}).status_code, 401)  # locked
+    con = accounts.connect()
+    con.execute("UPDATE users SET locked_until = '2000-01-01T00:00:00+00:00'")  # the fifteen minutes pass
+    con.commit()
+    check.assertEqual(api.post("/api/auth/login", json={"email": WHO, "password": PHRASE}).status_code, 200)
+
+    main._tries.clear()
+    for _ in range(main.SIGN_IN_TRIES):
+        api.post("/api/auth/login", json={"email": OTHER, "password": WRONG})
+    check.assertEqual(api.post("/api/auth/login", json={"email": WHO, "password": PHRASE}).status_code, 429)  # too many tries
+    main._tries.clear()
+
+
+def test_sessions_end(tmp_path, monkeypatch):
+    api = signed_in(monkeypatch, tmp_path)
+    con = accounts.connect()
+    con.execute("UPDATE sessions SET last_seen = '2000-01-01T00:00:00+00:00'")  # left idle
+    con.commit()
+    check.assertEqual(api.get("/api/auth/me").status_code, 401)
+
+    api = signed_in(monkeypatch, tmp_path)
+    con.execute("UPDATE sessions SET expires_at = '2000-01-01T00:00:00+00:00'")  # eight hours pass
+    con.commit()
+    check.assertEqual(api.get("/api/auth/me").status_code, 401)
+
+    api = signed_in(monkeypatch, tmp_path)
+    accounts.set_disabled(con, WHO, True)                                        # the account is switched off
+    check.assertEqual(api.get("/api/auth/me").status_code, 401)
+    main._tries.clear()
+    check.assertEqual(TestClient(main.app).post("/api/auth/login", json={"email": WHO, "password": PHRASE}).status_code, 401)
+    accounts.set_disabled(con, WHO, False)
+
+    api = signed_in(monkeypatch, tmp_path)
+    accounts.set_password(con, WHO, PHRASE + " new")                             # a new password ends old sessions
+    check.assertEqual(api.get("/api/auth/me").status_code, 401)
+
+
+def test_password_rules(tmp_path):
+    con = accounts.connect(tmp_path / "accounts.db")
+    for weak in ["short", "password1234", "aaaaaaaaaaaaaaaa", "x" * 200]:
+        with check.assertRaises(accounts.AccountError):
+            accounts.add_user(con, OTHER, weak)
+    with check.assertRaises(accounts.AccountError):
+        accounts.add_user(con, "not an email", PHRASE)
+    with check.assertRaises(accounts.AccountError):
+        accounts.add_user(con, OTHER, PHRASE, role="owner")
+    accounts.add_user(con, " %s " % OTHER.upper(), PHRASE, "admin")
+    with check.assertRaisesRegex(accounts.AccountError, "already"):
+        accounts.add_user(con, OTHER, PHRASE)
+
+
+def test_requests_from_other_sites_and_headers(tmp_path, monkeypatch):
+    api = signed_in(monkeypatch, tmp_path)
+    crossed = api.post("/api/auth/logout", headers={"Origin": "https://elsewhere.example"})
+    check.assertEqual(crossed.status_code, 403)
+    check.assertEqual(api.get("/api/auth/me").status_code, 200)                  # the session survived
+    check.assertEqual(api.post("/api/auth/logout", headers={"Origin": "http://testserver"}).status_code, 200)
+
+    answer = TestClient(main.app).get("/api/health")
+    check.assertEqual(answer.headers["x-content-type-options"], "nosniff")
+    check.assertEqual(answer.headers["x-frame-options"], "DENY")
+    check.assertEqual(answer.headers["cache-control"], "no-store")
+    check.assertIn("default-src 'self'", answer.headers["content-security-policy"])
+    check.assertIn("frame-ancestors 'none'", answer.headers["content-security-policy"])

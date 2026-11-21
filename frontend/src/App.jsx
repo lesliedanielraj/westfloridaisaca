@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
+import { useAuth } from './auth.jsx';
 import Placeholder from './pages/Placeholder.jsx';
+import SignIn from './pages/SignIn.jsx';
 import Reporting, { TABS } from './pages/Reporting.jsx';
 import Shell, { Icon } from './Shell.jsx';
 
@@ -40,6 +42,7 @@ function saved(key, allowed, fallback) {
 // The settings gear in the top bar. Its panel holds the appearance choices: light or dark, and one of five
 // colour themes. Both are remembered on this computer, and applied whether or not the panel is open.
 function Settings() {
+  const { user, signOut } = useAuth();
   const [mode, setMode] = useState(() => saved('wf-theme', MODES.map((m) => m[0]), 'auto'));
   const [accent, setAccent] = useState(() => saved('wf-accent', ACCENTS.map((a) => a[0]), 'blue'));
   const [open, setOpen] = useState(false);
@@ -71,6 +74,15 @@ function Settings() {
       {open && (
         <div className="wf-settings-panel" role="dialog" aria-label="Settings">
           <div className="wf-settings-head">Settings</div>
+          {user && (
+            <div className="wf-account">
+              <div className="wf-account-who">
+                <span className="wf-account-email">{user.email}</span>
+                <span className="wf-account-role">{user.role === 'admin' ? 'Administrator' : 'Board member'}</span>
+              </div>
+              <button type="button" className="wf-signout" onClick={signOut}>Sign out</button>
+            </div>
+          )}
           <div className="wf-settings-label" id="wf-set-mode">Appearance</div>
           <div className="wf-seg wf-seg-fill" role="group" aria-labelledby="wf-set-mode">
             {MODES.map(([id, name]) => (
@@ -102,6 +114,9 @@ export default function App() {
   const title = section.title || section.name;
   useEffect(() => { document.title = `${title} · ISACA West Florida`; }, [title]);
   const setTab = (id) => { window.location.hash = id; };
+  const { status } = useAuth();
+  if (status === 'checking') return <div className="wf-shell" aria-busy="true" />;
+  if (status === 'out') return <SignIn />;
 
   return (
     <Shell sections={SECTIONS} current={section.id} title={title} tools={<Settings />}>

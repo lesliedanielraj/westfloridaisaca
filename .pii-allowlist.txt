@@ -18,3 +18,12 @@ John Smith
 813-555-0142
 Jane Doe
 Jane Q. Doe
+
+# Example addresses on the domain reserved for examples, in the account notes, the tests and the demo data.
+you@example.org
+someone@example.org
+board.member@example.org
+demo@example.org
+
+# Not an address: part of the "::add-mask::" instruction that hides the demo session token in the pipeline's log.
+add
