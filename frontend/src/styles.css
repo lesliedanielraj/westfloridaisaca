@@ -293,3 +293,24 @@ button.wf-chip { cursor: pointer; }
 .wf-matrix td.wf-matrix-strong { color: var(--color-bg); font-weight: var(--cds-font-weight-medium); }
 .wf-matrix .wf-matrix-total { width: 62px; color: var(--color-fg-muted); background: none; }
 .wf-table td.wf-num { white-space: nowrap; }
+
+/* Bars: no track behind them, since the longest bar is the largest value, not 100% */
+.wf-bar-track { background: none; height: 12px; }
+.wf-bar-fill { border-radius: 0 4px 4px 0; }
+.wf-bars-tight { row-gap: 5px; }
+.wf-more { font: inherit; font-size: var(--cds-font-size-caption); color: var(--color-fg); background: var(--color-bg); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: 6px 12px; margin-top: var(--cds-gap-md); cursor: pointer; }
+/* Who: tenure columns, tier bars, the lead share */
+.wf-bandcols-plot { display: flex; align-items: flex-end; gap: 8px; height: 150px; border-bottom: 1px solid var(--cds-chart-axis); }
+.wf-bandcol { flex: 1 1 0; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; min-width: 0; }
+.wf-bandcol i { display: block; width: 100%; max-width: 34px; background: var(--wf-c1); border-radius: 4px 4px 0 0; }
+.wf-bandcol:hover i { filter: brightness(1.12); }
+.wf-bandcol-val { font-size: var(--cds-font-size-caption); font-variant-numeric: tabular-nums; margin-bottom: 4px; }
+.wf-bandcols-axis { display: flex; gap: 8px; margin-top: 6px; font-size: 11px; color: var(--color-fg-muted); text-align: center; }
+.wf-bandcols-axis span { flex: 1 1 0; min-width: 0; line-height: 1.2; }
+.wf-bandcols-unit { text-align: center; font-size: 11px; color: var(--color-fg-muted); margin-top: 4px; }
+.wf-tier { display: flex; gap: 2px; height: 28px; }
+.wf-tier-part { flex-basis: 0; min-width: 3px; border-radius: 4px; display: flex; align-items: center; padding-left: 7px; font-size: var(--cds-font-size-caption); font-weight: var(--cds-font-weight-medium); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; }
+.wf-lead-fig { font-size: 2.4rem; line-height: 1.1; font-weight: 500; letter-spacing: -0.01em; }
+.wf-lead-line { font-size: var(--cds-font-size-body); margin: 2px 0 10px; }
+.wf-lead-meter { align-self: stretch; }
+.wf-lead-rest { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); margin: var(--cds-gap-md) 0 var(--cds-gap-sm); }

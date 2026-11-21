@@ -1,7 +1,7 @@
 import { max, sum } from 'd3';
 import { useFilters } from '../filters.jsx';
 import { useTip } from '../tooltip.jsx';
-import { COLORS, colorsFor, fmt } from '../util.js';
+import { COLORS, colorsFor, fmt, isQuiet } from '../util.js';
 
 export const Empty = ({ children = 'No members match these filters' }) => <div className="wf-empty">{children}</div>;
 
@@ -120,6 +120,100 @@ export function Waffle({ rows }) {
         )))}
       </div>
       <Legend rows={rows} colors={colors} />
+    </div>
+  );
+}
+
+const SHORT_BANDS = {
+  'Under 1 year': 'Under 1', '1 to 3 years': '1 to 3', '3 to 5 years': '3 to 5',
+  '5 to 10 years': '5 to 10', '10 to 20 years': '10 to 20', '20 years or more': '20 or more',
+};
+
+// A column per band, in the bands' own order, so the shape of the distribution shows.
+export function BandColumns({ rows, unit }) {
+  const tip = useTip();
+  const { scope } = useFilters();
+  if (!rows) return <Empty>—</Empty>;
+  if (!rows.length) return <Empty />;
+  const most = max(rows, (r) => +r.members) || 1;
+  return (
+    <div className="wf-bandcols" role="img" aria-label={rows.map((r) => `${r.category}: ${fmt.int(r.members)}`).join('; ')}>
+      <div className="wf-bandcols-plot">
+        {rows.map((r) => (
+          <div key={r.category} className="wf-bandcol" {...tip.props(`${r.category}: ${fmt.int(r.members)} members (${fmt.pct(r.share)} of ${scope})`)}>
+            <span className="wf-bandcol-val">{fmt.int(r.members)}</span>
+            <i style={{ height: `${Math.max(2, (100 * r.members) / most)}%` }} />
+          </div>
+        ))}
+      </div>
+      <div className="wf-bandcols-axis">
+        {rows.map((r) => <span key={r.category}>{SHORT_BANDS[r.category] || r.category}</span>)}
+      </div>
+      {unit && <div className="wf-bandcols-unit">{unit}</div>}
+    </div>
+  );
+}
+
+// One whole split into a few blocks, each printing its share where it fits, with the names listed below.
+// `ordered` shades one colour from strong to light, for categories that run in order.
+export function TierBar({ rows, ordered, label }) {
+  const tip = useTip();
+  const { scope } = useFilters();
+  if (!rows) return <Empty>—</Empty>;
+  if (!rows.length) return <Empty />;
+  const total = sum(rows, (r) => +r.members) || 1;
+  const colors = colorsFor(rows, ordered);
+  // Ink that reads on each block: the page colour on strong fills, the text colour on pale ones.
+  const ink = (r, i) => ((ordered ? i < 2 : !isQuiet(r.category)) ? 'var(--color-bg)' : 'var(--color-fg)');
+  return (
+    <div>
+      <div className="wf-tier" role="img" aria-label={label}>
+        {rows.filter((r) => r.members > 0).map((r) => {
+          const i = rows.indexOf(r);
+          const part = (100 * r.members) / total;
+          return (
+            <div key={r.category} className="wf-tier-part" style={{ flexGrow: r.members, background: colors[i], color: ink(r, i) }}
+              {...tip.props(`${r.category}: ${fmt.int(r.members)} members (${fmt.pct(r.share)} of ${scope})`)}>
+              {part >= 18 ? fmt.pct(r.share) : ''}
+            </div>
+          );
+        })}
+      </div>
+      <Legend rows={rows} colors={colors} />
+    </div>
+  );
+}
+
+// One category dominates: lead with its share, then show the rest on their own scale.
+export function LeadShare({ rows, noun = 'members' }) {
+  const tip = useTip();
+  const { scope } = useFilters();
+  if (!rows) return <Empty>—</Empty>;
+  if (!rows.length) return <Empty />;
+  const [lead, ...rest] = [...rows].sort((a, b) => b.members - a.members);
+  const most = max(rest, (r) => +r.members) || 1;
+  return (
+    <div>
+      <div className="wf-lead-fig">{fmt.pct(lead.share)}</div>
+      <div className="wf-lead-line">{lead.category} · {fmt.int(lead.members)} {noun}</div>
+      <div className="wf-meter wf-lead-meter"><i style={{ width: `${lead.share}%` }} /></div>
+      {rest.length > 0 && (
+        <>
+          <div className="wf-lead-rest">The other {fmt.pct(100 - lead.share)}</div>
+          <div className="wf-bars wf-bars-tight">
+            {rest.map((r) => {
+              const hover = tip.props(`${r.category}: ${fmt.int(r.members)} ${noun} (${fmt.pct(r.share)} of ${scope})`);
+              return [
+                <div key={`${r.category}-l`} className="wf-bar-label" {...hover}>{r.category}</div>,
+                <div key={`${r.category}-t`} className="wf-bar-track" {...hover}>
+                  <div className="wf-bar-fill" style={{ width: `${(100 * r.members) / most}%`, background: COLORS[0] }} />
+                </div>,
+                <div key={`${r.category}-v`} className="wf-bar-val" {...hover}>{fmt.int(r.members)} · {fmt.pct(r.share)}</div>,
+              ];
+            })}
+          </div>
+        </>
+      )}
     </div>
   );
 }
