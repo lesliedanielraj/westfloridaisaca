@@ -1,0 +1,20 @@
+# Matches the pull-request PII check (tools/pii_scan.py) may ignore. One per line, exactly as the check
+# prints it, without the quotes. Add a line only after checking that it is not a real person's detail.
+
+# A firm and a town that read as people's names.
+Raymond James
+Wesley Chapel
+
+# This computer's own address, where the site runs.
+127.0.0.1
+
+# Not an email: a GitHub address with a version after the @.
+github.com/awslabs/automated-security-helper.git@v3.8.0
+
+# Made-up details the tests use to prove the checks catch them, and examples in the check's own notes.
+MARKER}@example.org
+jane.doe@example.org
+John Smith
+813-555-0142
+Jane Doe
+Jane Q. Doe

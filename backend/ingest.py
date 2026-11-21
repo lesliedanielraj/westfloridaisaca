@@ -488,7 +488,8 @@ def main():
         con = sqlite3.connect(args.db)
         con.executescript(VIEWS)
         con.close()
-        print("Added the view deidentified_members to %s. Try: SELECT * FROM deidentified_members LIMIT 10;" % args.db)
+        print("Added the view deidentified_members to %s." % args.db)
+        print("To see it, open the database and run the query in README.md under 'How members are protected'.")
         return
     if args.clear:
         if args.roster or any(given) or args.truncate:
