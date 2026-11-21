@@ -11,14 +11,14 @@ from fastapi.testclient import TestClient
 from backend import classify, ingest, main
 
 TITLE = "ISACA Chapter Member Roster\nTest Chapter (999)\nas of 11/18/2026 08:00:00 PM Chicago Time"
-SECRET = "ZZ-PRIVATE"  # stands in for every personal detail; must never reach the database
+MARKER = "ZZ-PRIVATE"  # stands in for every personal detail; must never reach the database
 
 
 def member(n, area, zip_code, city, company, joined, certs=(), level="Gold", state="Florida"):
     row = {
-        "Member ID": f"{SECRET}-{n}", "First Name": f"{SECRET}-first", "Last / Family Name": f"{SECRET}-last",
-        "Email": f"{SECRET}@example.org", "Home Phone": f"{SECRET}-phone", "Home Address 1": f"{SECRET} Street",
-        "Title": f"{SECRET}-title",
+        "Member ID": f"{MARKER}-{n}", "First Name": f"{MARKER}-first", "Last / Family Name": f"{MARKER}-last",
+        "Email": f"{MARKER}@example.org", "Home Phone": f"{MARKER}-phone", "Home Address 1": f"{MARKER} Street",
+        "Title": f"{MARKER}-title",
         "Professional Area": area, "Member Level": level, "Member Type": "Professional Membership", "Gender": "Female",
         "Company": company, "Home City": city, "Home State": state, "Home Zip": zip_code,
         "Join Date": joined, "Expiry Date": "12/31/26",
@@ -46,10 +46,10 @@ def client(tmp_path_factory):
         member(6, None, "10001", "New York", None, "02/01/10", state="New York"),
     ]
     write_report(folder / "roster.xlsx", TITLE, roster)
-    people = {"ID": [f"{SECRET}-7", f"{SECRET}-8"], "First Name": [SECRET, SECRET], "Email": [SECRET, SECRET]}
+    people = {"ID": [f"{MARKER}-7", f"{MARKER}-8"], "First Name": [MARKER, MARKER], "Email": [MARKER, MARKER]}
     write_report(folder / "new.xlsx", "New ISACA Chapter Members as of 11/18/2026", {
         **people, "Type": ["Professional Membership", "Student Membership"], "Join Date": ["10/05/2026", "11/02/2026"]})
-    transfer = lambda day, src, dst: {"ID": [f"{SECRET}-9"], "Transfer Date": [day], "FirstName": [SECRET], "Email": [SECRET],
+    transfer = lambda day, src, dst: {"ID": [f"{MARKER}-9"], "Transfer Date": [day], "FirstName": [MARKER], "Email": [MARKER],
                                       "Chapter From": [src], "Chapter To": [dst]}
     write_report(folder / "in.xlsx", "Incoming transfers 11/18/2026", transfer("20261014", "Austin Chapter", "Test Chapter"), 3)
     write_report(folder / "out.xlsx", "Outgoing transfers 11/18/2026", transfer("20261007", "Test Chapter", "Denver Chapter"), 3)
@@ -67,7 +67,7 @@ def client(tmp_path_factory):
 
 def test_no_personal_details_are_stored(client):
     _, db_path = client
-    assert SECRET.encode() not in db_path.read_bytes()
+    assert MARKER.encode() not in db_path.read_bytes()
     columns = {r[1] for r in sqlite3.connect(db_path).execute("PRAGMA table_info(members)")}
     assert not columns & {"name", "first_name", "last_name", "email", "phone", "address", "member_id", "title"}
 
@@ -134,3 +134,15 @@ def test_bad_requests(client):
     assert api.get("/api/breakdown/shoe_size").status_code == 404
     assert api.get("/api/movement", params={"month": "1999-01"}).status_code == 404
     assert api.get("/api/joins/decade").status_code == 404
+
+
+def test_filter_values_are_data_not_sql(client):
+    """The SQL text is built from fixed pieces in main.py; whatever a caller sends is bound as a value."""
+    api, db_path = client
+    for hostile in ["' OR '1'='1", "x'; DROP TABLE members; --", '" OR 1=1 --']:
+        for name in ("seniority", "county", "job_function", "credential", "exclude"):
+            answer = api.get("/api/summary", params={name: hostile})
+            assert answer.status_code == 200
+            assert answer.json()["members"] == (6 if name == "exclude" else 0)
+    assert api.get("/api/breakdown/seniority; DROP TABLE members").status_code == 404
+    assert sqlite3.connect(db_path).execute("SELECT COUNT(*) FROM members").fetchone()[0] == 6

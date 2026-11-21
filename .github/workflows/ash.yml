@@ -1,0 +1,23 @@
+# Security scan with ASH, the AWS Automated Security Helper, on every pull request into main.
+# It fails the pull request on any finding of medium severity or higher, posts a summary as a
+# comment, and keeps the full reports as the "ash_output" artifact of the run.
+name: ASH security scan
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: ash-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  ash:
+    uses: awslabs/automated-security-helper/.github/workflows/run-ash-security-scan.yml@f356ca77388a4c58bcf25d904a21121ab8872a66 # v3.8.0
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
+    with:
+      ash-version: f356ca77388a4c58bcf25d904a21121ab8872a66
+      ash-args: --fail-on-incomplete-scanners --no-allow-stale-content-db
+      collect-sarif-report: false

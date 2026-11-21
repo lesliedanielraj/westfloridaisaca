@@ -1,0 +1,23 @@
+# Settings for ASH, the AWS Automated Security Helper. See "Security scan" in README.md.
+project_name: westfloridaisaca
+global_settings:
+  severity_threshold: MEDIUM
+  suppressions:
+    # Reviewed 2026-11-20. bandit flags any SQL assembled from strings. In these two files the
+    # assembled parts are fixed text defined in the code (the filter clauses, the breakdown
+    # expressions, column names); every value a caller sends is bound with "?". The test
+    # test_filter_values_are_data_not_sql checks this. Review again when the date passes.
+    - path: backend/main.py
+      rule_id: B608
+      reason: SQL text is built from constants in the code; caller values are bound parameters
+      expires: "2027-11-20"
+    - path: backend/ingest.py
+      rule_id: B608
+      reason: Column names come from the ingest's own table definition; values are bound parameters
+      expires: "2027-11-20"
+    - path: backend/tests/**
+      rule_id: B101
+      reason: assert is how the tests check results
+    - path: .github/workflows/ash.yml
+      rule_id: SECRET-HEX-HIGH-ENTROPY-STRING
+      reason: The value is the public commit ID of the ASH v3.8.0 release, not a secret

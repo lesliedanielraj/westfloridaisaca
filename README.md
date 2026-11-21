@@ -128,6 +128,28 @@ one or two people.
   reports. The member filters do not apply to it.
 - **Shares** are a percentage of the members the filters select.
 
+## Security scan
+
+Every pull request into `main` is scanned with [ASH](https://github.com/awslabs/automated-security-helper),
+the AWS Automated Security Helper (`.github/workflows/ash.yml`). It checks the Python and
+JavaScript code, the dependencies, the workflow files and the history for secrets. A finding
+of medium severity or higher fails the pull request, and a summary is posted as a comment.
+
+To run the same scan on your computer:
+
+```sh
+uv tool install git+https://github.com/awslabs/automated-security-helper.git@v3.8.0
+ash dependencies install
+ash --mode local
+```
+
+The reports are written to `.ash/ash_output/reports/`; open `ash.html`.
+
+`.ashrc.yaml` lists the findings that were reviewed and accepted, each with its reason. The
+main one: the scanner flags SQL that is assembled from strings, and the API does assemble
+its `WHERE` clauses, but only from fixed text in the code. Every value a caller sends is
+bound as a parameter, and a test checks that.
+
 ## Layout
 
 ```
@@ -136,6 +158,8 @@ backend/
   classify.py      seniority, job function and employer rules
   main.py          the API
   tests/           checks on the ingest and API, with a made-up roster
+.github/workflows/ash.yml   security scan on pull requests into main
+.ashrc.yaml        scan settings and accepted findings
 frontend/
   src/App.jsx      header, filter bar and tabs
   src/pages/       one file per tab
