@@ -24,21 +24,47 @@ const tabFromAddress = () => {
 };
 
 // Auto follows the computer's setting; light and dark override it. The choice is remembered.
-function ThemeToggle() {
-  const order = ['auto', 'light', 'dark'];
-  const [theme, setTheme] = useState(() => {
-    try { return window.localStorage.getItem('wf-theme') || 'auto'; } catch { return 'auto'; }
-  });
+const MODES = [['auto', 'Auto'], ['light', 'Light'], ['dark', 'Dark']];
+// Colour themes: the name, and the lead colour shown on its button in light and in dark.
+const ACCENTS = [
+  ['blue', 'Blue', '#3565c9', '#5f8fe8'], ['teal', 'Teal', '#00909a', '#159fa8'], ['violet', 'Violet', '#6b4fc0', '#9076ee'],
+  ['green', 'Green', '#2e8552', '#3aad6e'], ['crimson', 'Crimson', '#b23a52', '#e35f7c'],
+];
+
+function saved(key, allowed, fallback) {
+  try {
+    const value = window.localStorage.getItem(key);
+    return allowed.includes(value) ? value : fallback;
+  } catch { return fallback; }
+}
+
+// Light or dark, and one of five colour themes. Both are remembered on this computer.
+function Appearance() {
+  const [mode, setMode] = useState(() => saved('wf-theme', MODES.map((m) => m[0]), 'auto'));
+  const [accent, setAccent] = useState(() => saved('wf-accent', ACCENTS.map((a) => a[0]), 'blue'));
   useEffect(() => {
     const root = document.documentElement;
-    if (theme === 'auto') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', theme);
-    try { window.localStorage.setItem('wf-theme', theme); } catch { /* not saved */ }
-  }, [theme]);
+    if (mode === 'auto') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', mode);
+    if (accent === 'blue') root.removeAttribute('data-accent'); else root.setAttribute('data-accent', accent);
+    try {
+      window.localStorage.setItem('wf-theme', mode);
+      window.localStorage.setItem('wf-accent', accent);
+    } catch { /* not saved */ }
+  }, [mode, accent]);
   return (
-    <button type="button" className="wf-theme" aria-label="Switch between light and dark mode"
-      onClick={() => setTheme(order[(order.indexOf(theme) + 1) % order.length])}>
-      Theme: {theme}
-    </button>
+    <div className="wf-looks">
+      <div className="wf-swatches" role="radiogroup" aria-label="Colour theme">
+        {ACCENTS.map(([id, name, light]) => (
+          <button key={id} type="button" role="radio" aria-checked={accent === id} aria-label={`${name} colour theme`} title={name}
+            className="wf-swatch-btn" style={{ background: light }} onClick={() => setAccent(id)} />
+        ))}
+      </div>
+      <div className="wf-seg" role="group" aria-label="Light or dark">
+        {MODES.map(([id, name]) => (
+          <button key={id} type="button" className="wf-seg-btn" aria-pressed={mode === id} onClick={() => setMode(id)}>{name}</button>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -47,7 +73,7 @@ function Header({ summary }) {
   const s = summary;
   return (
     <header className="wf-head">
-      <ThemeToggle />
+      <Appearance />
       <div className="wf-brand"><img className="wf-logo" src={logo} alt="ISACA West Florida Chapter" width="462" height="160" /></div>
       <h1 className="wf-title">West Florida ISACA Member Insights</h1>
       <p className="wf-lede">

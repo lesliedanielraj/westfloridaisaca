@@ -228,6 +228,14 @@ frontend/
 static-dashboard/  the earlier single-file version; see its README
 ```
 
+## Appearance
+
+The header has a light, dark or automatic switch and five colour themes: blue, teal,
+violet, green and crimson. Both choices are remembered in the browser. Each theme's four
+chart colours were checked for colour-blind separation, in light and in dark, with the
+palette validator from the charting guidance the site follows. To add a theme, add its
+colours to `frontend/src/styles.css` and its name to `ACCENTS` in `frontend/src/App.jsx`.
+
 ## Third-party material
 
 - [React](https://react.dev), [d3](https://d3js.org), [Vite](https://vite.dev) and
