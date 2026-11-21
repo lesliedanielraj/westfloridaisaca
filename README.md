@@ -262,8 +262,9 @@ static-dashboard/  the earlier single-file version; see its README
 
 ## Appearance
 
-The settings gear at the top right holds a light, dark or automatic switch and five
-colour themes: blue, teal, violet, green and crimson. Both choices are remembered in the browser. Each theme's four
+The settings gear at the top right holds a light, dark or automatic switch and seventeen
+colour themes that run round the colour wheel, from blue through teal, green, amber, orange,
+crimson and magenta to indigo. Both choices are remembered in the browser. Each theme's four
 chart colours were checked for colour-blind separation, in light and in dark, with the
 palette validator from the charting guidance the site follows. To add a theme, add its
 colours to `frontend/src/styles.css` and its name to `ACCENTS` in `frontend/src/App.jsx`.

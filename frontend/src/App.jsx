@@ -21,10 +21,13 @@ function routeFromAddress() {
 }
 
 const MODES = [['auto', 'Auto'], ['light', 'Light'], ['dark', 'Dark']];
-// Colour themes: the name, and the lead colour shown on its button in light and in dark.
+// Colour themes, in the order of the colour wheel: the name, and the lead colour shown on its button.
 const ACCENTS = [
-  ['blue', 'Blue', '#3565c9', '#5f8fe8'], ['teal', 'Teal', '#00909a', '#159fa8'], ['violet', 'Violet', '#6b4fc0', '#9076ee'],
-  ['green', 'Green', '#2e8552', '#3aad6e'], ['crimson', 'Crimson', '#b23a52', '#e35f7c'],
+  ['blue', 'Blue', '#3565c9'], ['azure', 'Azure', '#0079b3'], ['cyan', 'Cyan', '#0389a0'], ['teal', 'Teal', '#00909a'],
+  ['emerald', 'Emerald', '#078661'], ['green', 'Green', '#2e8552'], ['olive', 'Olive', '#6c7b06'], ['amber', 'Amber', '#9a7403'],
+  ['orange', 'Orange', '#ab5806'], ['coral', 'Coral', '#cb4a2a'], ['crimson', 'Crimson', '#b23a52'], ['rose', 'Rose', '#bb3a6d'],
+  ['magenta', 'Magenta', '#ae4090'], ['orchid', 'Orchid', '#a552b7'], ['purple', 'Purple', '#8951bf'], ['violet', 'Violet', '#6b4fc0'],
+  ['indigo', 'Indigo', '#5863d3'],
 ];
 
 function saved(key, allowed, fallback) {
