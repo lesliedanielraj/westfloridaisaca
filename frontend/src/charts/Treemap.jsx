@@ -1,7 +1,7 @@
 import { hierarchy, max, pack, treemap } from 'd3';
 import { useFilters } from '../filters.jsx';
 import { useTip } from '../tooltip.jsx';
-import { COLORS, MUTED, fmt, isQuiet, useWidth } from '../util.js';
+import { COLORS, MUTED, fmt, isQuiet, textWidth, useWidth } from '../util.js';
 import { Empty } from './Bars.jsx';
 
 // Boxes sized by members. `pick` makes a box clickable to set a filter.
@@ -14,8 +14,8 @@ export function Treemap({ rows, pick }) {
   if (rows && !rows.length) body = <Empty />;
   if (rows && rows.length) {
     const root = hierarchy({ children: rows }).sum((r) => +r.members || 0);
-    treemap().size([w, h]).paddingInner(3).round(true)(root);
-    const most = max(rows, (r) => +r.members) || 1;
+    treemap().size([w, h]).paddingInner(4).round(true)(root);
+    const unnamed = [];
     body = (
       <div className="wf-tree" style={{ height: h }}>
         {root.leaves().map((leaf) => {
@@ -23,22 +23,45 @@ export function Treemap({ rows, pick }) {
           const cw = leaf.x1 - leaf.x0;
           const ch = leaf.y1 - leaf.y0;
           const on = pick && pick.value === r.category;
+          // Every function wears the same tint: the box's size already says how big it is.
           const background = isQuiet(r.category)
             ? `color-mix(in srgb, ${MUTED} 55%, var(--color-panel))`
-            : `color-mix(in srgb, ${COLORS[0]} ${Math.round(18 + (34 * r.members) / most)}%, var(--color-panel))`;
+            : `color-mix(in srgb, ${COLORS[0]} 42%, var(--color-panel))`;
+          // A name is printed only where it fits whole, on one line or two.
+          const nameW = textWidth(r.category, 14);
+          const named = cw > 64 && ((nameW <= cw - 22 && ch > 26) || (nameW <= (cw - 22) * 1.8 && ch > 46));
+          if (!named) unnamed.push(r);
           const text = `${r.category}: ${fmt.int(r.members)} members (${fmt.pct(r.share)} of those shown)`
             + (pick ? `. Click to ${on ? 'clear this filter' : 'filter by this'}.` : '');
           return (
             <div key={r.category} className={`wf-tree-cell${pick ? ` wf-pickable${on ? ' wf-on wf-tree-on' : pick.value ? ' wf-dim' : ''}` : ''}`}
               style={{ left: `${(100 * leaf.x0) / w}%`, top: leaf.y0, width: `${(100 * cw) / w}%`, height: ch, background }}
               {...tip.props(text)} onClick={pick ? () => pick.toggle(r.category) : undefined}>
-              {cw > 64 && ch > 22 && <div className="wf-tree-name">{r.category}</div>}
-              {cw > 64 && ch > 52 && <div className="wf-tree-val">{fmt.int(r.members)} · {fmt.pct(r.share)}</div>}
+              {named && <div className="wf-tree-name">{r.category}</div>}
+              {named && ch > (nameW <= cw - 22 ? 52 : 70) && <div className="wf-tree-val">{fmt.int(r.members)} · {fmt.pct(r.share)}</div>}
             </div>
           );
         })}
       </div>
     );
+    if (unnamed.length) {
+      body = (
+        <>
+          {body}
+          <div className="wf-tree-rest">
+            <span>Too small to label:</span>
+            {unnamed.map((r) => {
+              const on = pick && pick.value === r.category;
+              return pick ? (
+                <button key={r.category} type="button" className="wf-chip" aria-pressed={on} onClick={() => pick.toggle(r.category)}>
+                  {r.category} <b>{fmt.int(r.members)}</b>
+                </button>
+              ) : <span key={r.category} className="wf-chip">{r.category} <b>{fmt.int(r.members)}</b></span>;
+            })}
+          </div>
+        </>
+      );
+    }
   }
   return <div ref={ref}>{body}</div>;
 }

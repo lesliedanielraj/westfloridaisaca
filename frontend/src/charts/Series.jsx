@@ -96,12 +96,15 @@ export function Trend({ rows, label }) {
 }
 
 // Joined above the line, left below it: one column per week, or per day when a month is picked.
+// Both kinds of joiner are blue (new members solid, transfers in lighter); leavers are orange.
 export function Flow({ daily, byWeek, label }) {
   const tip = useTip();
   const [ref, width] = useWidth();
   const w = Math.max(240, width || 520);
-  const h = 210;
-  const [cNew, cIn, cOut] = [COLORS[0], COLORS[2], COLORS[1]];
+  const h = 220;
+  const cNew = COLORS[0];
+  const cIn = `color-mix(in srgb, ${COLORS[0]} 45%, var(--color-panel))`;
+  const cOut = COLORS[1];
   let body = <Empty>—</Empty>;
   if (daily && !daily.length) body = <Empty>Nothing in this period</Empty>;
   if (daily && daily.length) {
@@ -114,35 +117,48 @@ export function Flow({ daily, byWeek, label }) {
       bin.transferred_in += d.transferred_in;
       bin.transferred_out += d.transferred_out;
     });
-    const up = Math.max(1, max(rows, (r) => r.new_members + r.transferred_in) || 0);
+    const joined = (r) => r.new_members + r.transferred_in;
+    const up = Math.max(1, max(rows, joined) || 0);
     const down = Math.max(1, max(rows, (r) => r.transferred_out) || 0);
     const y = scaleLinear().domain([-down, up]).nice(5);
     const ticks = y.ticks(5).filter(Number.isInteger);
     const labelW = max(rows, (r) => textWidth(fmt.shortDate(r.start))) || 30;
-    const m = { t: 16, r: Math.ceil(labelW / 2), b: 24, l: Math.ceil(max(ticks, (t) => textWidth(Math.abs(t))) || 10) + 10 };
-    const x = scaleBand().domain(rows.map((r) => r.start)).range([m.l, w - m.r]).padding(byWeek ? 0.3 : 0.2);
+    const m = { t: 20, r: Math.ceil(labelW / 2), b: 24, l: Math.ceil(max(ticks, (t) => textWidth(Math.abs(t))) || 10) + 10 };
+    const x = scaleBand().domain(rows.map((r) => r.start)).range([m.l, w - m.r]).padding(0.2);
     y.range([h - m.b, m.t]);
+    const bw = Math.min(24, x.bandwidth());
+    const left = (r) => x(r.start) + (x.bandwidth() - bw) / 2;
     const every = Math.max(1, Math.ceil((labelW + 8) / x.step()));
-    const bar = (r, from, to, fill, key) => (
-      <rect key={`${key}${r.start}`} x={x(r.start)} width={x.bandwidth()} y={Math.min(y(from), y(to))} height={Math.abs(y(from) - y(to))} style={{ fill }} />
-    );
+    const GAP = 2;
+    // A column segment from one value to another. `round` rounds the end away from the zero line.
+    const seg = (r, from, to, fill, key, round) => {
+      const top = Math.min(y(from), y(to));
+      const height = Math.abs(y(from) - y(to)) - (from !== 0 && to !== 0 ? GAP : 0);
+      if (height <= 0) return null;
+      const x0 = left(r);
+      const rad = round ? Math.min(4, height, bw / 2) : 0;
+      const d = to >= 0
+        ? `M${x0},${top + height}V${top + rad}q0,${-rad} ${rad},${-rad}H${x0 + bw - rad}q${rad},0 ${rad},${rad}V${top + height}Z`
+        : `M${x0},${top}V${top + height - rad}q0,${rad} ${rad},${rad}H${x0 + bw - rad}q${rad},0 ${rad},${-rad}V${top}Z`;
+      return <path key={`${key}${r.start}`} d={d} style={{ fill }} />;
+    };
     const when = (r) => (r.start === r.end ? fmt.shortDate(r.start) : `${fmt.shortDate(r.start)} to ${fmt.shortDate(r.end)}`);
+    const peak = max(rows, joined);
+    const firstPeak = rows.find((r) => joined(r) === peak);
     body = (
       <svg width="100%" viewBox={`0 0 ${w} ${h}`} role="img" aria-label={label}>
         <Grid ticks={ticks} y={y} left={m.l} right={w - m.r} label={(t) => Math.abs(t)} />
-        {rows.map((r) => bar(r, 0, r.new_members, cNew, 'n'))}
-        {rows.map((r) => bar(r, r.new_members, r.new_members + r.transferred_in, cIn, 'i'))}
-        {rows.map((r) => bar(r, 0, -r.transferred_out, cOut, 'o'))}
-        {x.bandwidth() >= 18 && rows.filter((r) => byWeek || r.new_members + r.transferred_in > 0).map((r) => (
-          <text key={`v${r.start}`} className="wf-vlabel" x={x(r.start) + x.bandwidth() / 2} y={y(r.new_members + r.transferred_in) - 4} textAnchor="middle">
-            {fmt.int(r.new_members + r.transferred_in)}
-          </text>
-        ))}
+        {rows.map((r) => seg(r, 0, r.new_members, cNew, 'n', r.transferred_in === 0))}
+        {rows.map((r) => seg(r, r.new_members, joined(r), cIn, 'i', true))}
+        {rows.map((r) => seg(r, 0, -r.transferred_out, cOut, 'o', true))}
+        {peak > 0 && firstPeak && (
+          <text className="wf-vlabel" x={left(firstPeak) + bw / 2} y={y(peak) - 6} textAnchor="middle">{fmt.int(peak)}</text>
+        )}
         {rows.filter((r, i) => i % every === 0).map((r) => (
           <text key={`x${r.start}`} className="wf-tick" x={x(r.start) + x.bandwidth() / 2} y={h - 6} textAnchor="middle">{fmt.shortDate(r.start)}</text>
         ))}
         {rows.map((r) => (
-          <rect key={`h${r.start}`} x={x(r.start) - x.step() * 0.1} width={x.step()} y={m.t} height={h - m.b - m.t} style={{ fill: 'transparent' }}
+          <rect key={`h${r.start}`} className="wf-hit" x={x(r.start) - x.step() * 0.1} width={x.step()} y={m.t} height={h - m.b - m.t}
             {...tip.props(`${when(r)}: ${fmt.int(r.new_members)} new, ${fmt.int(r.transferred_in)} transferred in, ${fmt.int(r.transferred_out)} transferred out`)} />
         ))}
       </svg>
@@ -154,7 +170,7 @@ export function Flow({ daily, byWeek, label }) {
         {[['New members', cNew], ['Transferred in', cIn], ['Transferred out', cOut]].map(([name, color]) => (
           <span key={name}><i className="wf-swatch" style={{ background: color }} />{name}</span>
         ))}
-        <span>{byWeek ? 'Each column is one week' : 'Each column is one day'}</span>
+        <span>{byWeek ? 'One column per week' : 'One column per day'}</span>
       </div>
       {body}
     </div>
