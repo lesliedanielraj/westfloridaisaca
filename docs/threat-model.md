@@ -36,7 +36,7 @@ Last reviewed: 20 November 2026.
 | 2 | Guessing a password | Argon2id hashes; 12-character minimum; lockout after 5 tries for 15 minutes; 10 tries a minute per address; same answer for a wrong email and a wrong password. | No second factor. The per-address limit resets when the server restarts. |
 | 3 | Stealing a session | Cookie cannot be read by scripts or sent by other sites; only its hash is stored; ends after 8 hours, or 2 idle; ended by password change or disabling. | Over plain `http` a session can be read on the network. The cookie is marked secure only over `https`. |
 | 4 | Another site acting through a signed-in browser | SameSite=Strict cookie; changes with a foreign `Origin` are refused; the site cannot be framed. | — |
-| 5 | Injected script | React escapes text; a content security policy allows scripts only from the site itself. | Inline styles are allowed, because the charts need them. |
+| 5 | Injected script | React escapes text; a content security policy allows scripts and styles only from the site itself, with nothing inline. | — |
 | 6 | SQL injection | Every statement is fixed text with bound values; bandit and a test with hostile input check it. | — |
 | 7 | Picking a person out of the counts | Five-member floor on employers, ZIP codes and cities; filters that select under five show nothing; dates kept to the month. | Small counts still appear inside charts. Repeated filtering can narrow a group; a signed-in member is trusted not to. |
 | 8 | Personal details reaching the database | Column allowlist; Presidio and pattern scan; Pandera checks; a failed check stores nothing. | Name detection can miss a name inside a longer phrase. |

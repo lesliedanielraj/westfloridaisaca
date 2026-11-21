@@ -18,6 +18,7 @@ KEY = bytes(range(32))  # a fixed pseudonym key for the tests
 WHO = "board.member@example.org"
 OTHER = "someone@example.org"
 PHRASE = secrets.token_urlsafe(18)  # the test account's passphrase, made fresh on every run
+WRONG = "wrong " + PHRASE
 MARKER = "ZZ-PRIVATE"  # stands in for every personal detail; must never reach the database
 
 
@@ -410,7 +411,7 @@ def test_wrong_passwords_lock_the_account(tmp_path, monkeypatch):
     signed_in(monkeypatch, tmp_path)
     api = TestClient(main.app)
     for _ in range(accounts.MAX_FAILURES):
-        check.assertEqual(api.post("/api/auth/login", json={"email": WHO, "password": "wrong " + PHRASE}).status_code, 401)
+        check.assertEqual(api.post("/api/auth/login", json={"email": WHO, "password": WRONG}).status_code, 401)
     check.assertEqual(api.post("/api/auth/login", json={"email": WHO, "password": PHRASE}).status_code, 401)  # locked
     con = accounts.connect()
     con.execute("UPDATE users SET locked_until = '2000-01-01T00:00:00+00:00'")  # the fifteen minutes pass
@@ -419,7 +420,7 @@ def test_wrong_passwords_lock_the_account(tmp_path, monkeypatch):
 
     main._tries.clear()
     for _ in range(main.SIGN_IN_TRIES):
-        api.post("/api/auth/login", json={"email": OTHER, "password": "wrong " + PHRASE})
+        api.post("/api/auth/login", json={"email": OTHER, "password": WRONG})
     check.assertEqual(api.post("/api/auth/login", json={"email": WHO, "password": PHRASE}).status_code, 429)  # too many tries
     main._tries.clear()
 

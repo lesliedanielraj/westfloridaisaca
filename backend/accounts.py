@@ -41,8 +41,8 @@ MAX_FAILURES = 5
 LOCK_MINUTES = 15
 MIN_PASSWORD, MAX_PASSWORD = 12, 128
 # A short list of the commonest long passwords; length is the main requirement.
-COMMON = {"password1234", "123456789012", "qwertyuiop12", "passwordpassword", "letmeinletmein", "administrator", "welcome12345",
-          "isacaisacaisaca", "westflorida123", "changeme12345", "iloveyou12345", "password12345", "qwerty1234567"}
+COMMON = {line.strip() for line in pathlib.Path(__file__).with_name("common_passwords.txt").read_text().splitlines()
+          if line.strip() and not line.startswith("#")}
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (

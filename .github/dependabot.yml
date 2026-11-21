@@ -6,17 +6,20 @@ updates:
   - package-ecosystem: pip
     directories: ["/backend", "/tools", "/static-dashboard"]
     schedule: { interval: weekly, day: monday }
+    cooldown: { default-days: 7 }  # wait a week: a brand-new release can be a bad one
     open-pull-requests-limit: 5
     groups:
       python: { patterns: ["*"] }
   - package-ecosystem: npm
     directory: /frontend
     schedule: { interval: weekly, day: monday }
+    cooldown: { default-days: 7 }  # wait a week: a brand-new release can be a bad one
     open-pull-requests-limit: 5
     groups:
       javascript: { patterns: ["*"] }
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: weekly, day: monday }
+    cooldown: { default-days: 7 }  # wait a week: a brand-new release can be a bad one
     groups:
       actions: { patterns: ["*"] }

@@ -54,8 +54,9 @@ HEADERS = {
     "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=()",
     "Cross-Origin-Opener-Policy": "same-origin",
     "Cross-Origin-Resource-Policy": "same-origin",
-    # Scripts, fonts and data only from this site. Inline styles are allowed because the charts set sizes that way.
-    "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
+    "Cross-Origin-Embedder-Policy": "require-corp",
+    # Scripts, styles, fonts and data only from this site, and nothing written inline in a page.
+    "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
                                "font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; "
                                "frame-ancestors 'none'",
 }
@@ -73,7 +74,10 @@ async def guard(request: Request, call_next):
         response.headers["Allow"] = "POST" if request.url.path in ("/api/auth/login", "/api/auth/logout") else "GET"
     for name, value in HEADERS.items():
         response.headers.setdefault(name, value)
-    if request.url.path.startswith("/api/"):
+    # Built files carry a fingerprint in their name, so a browser may keep them. Nothing else is kept anywhere.
+    if request.url.path.startswith("/assets/") and response.status_code == 200:
+        response.headers["Cache-Control"] = "private, max-age=31536000, immutable"
+    else:
         response.headers["Cache-Control"] = "no-store"
     if request.url.scheme == "https":
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
