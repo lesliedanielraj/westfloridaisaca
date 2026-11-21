@@ -130,7 +130,7 @@ const SHORT_BANDS = {
 };
 
 // A column per band, in the bands' own order, so the shape of the distribution shows.
-export function BandColumns({ rows, unit }) {
+export function BandColumns({ rows, unit, tipFor }) {
   const tip = useTip();
   const { scope } = useFilters();
   if (!rows) return <Empty>—</Empty>;
@@ -140,7 +140,7 @@ export function BandColumns({ rows, unit }) {
     <div className="wf-bandcols" role="img" aria-label={rows.map((r) => `${r.category}: ${fmt.int(r.members)}`).join('; ')}>
       <div className="wf-bandcols-plot">
         {rows.map((r) => (
-          <div key={r.category} className="wf-bandcol" {...tip.props(`${r.category}: ${fmt.int(r.members)} members (${fmt.pct(r.share)} of ${scope})`)}>
+          <div key={r.category} className="wf-bandcol" {...tip.props(tipFor ? tipFor(r) : `${r.category}: ${fmt.int(r.members)} members (${fmt.pct(r.share)} of ${scope})`)}>
             <span className="wf-bandcol-val">{fmt.int(r.members)}</span>
             <i style={{ height: `${Math.max(2, (100 * r.members) / most)}%` }} />
           </div>
