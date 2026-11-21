@@ -164,6 +164,7 @@ frontend/
   src/App.jsx      header, filter bar and tabs
   src/pages/       one file per tab
   src/charts/      donut, treemap, bars, map and the other charts
+  src/geo/         county outlines and the basemap
   src/api.js       useApi(): fetch from the API when the filters change
   src/filters.jsx  the filters, kept in the page address
 static-dashboard/  the earlier single-file version; see its README
@@ -174,6 +175,8 @@ static-dashboard/  the earlier single-file version; see its README
 - [React](https://react.dev), [d3](https://d3js.org), [Vite](https://vite.dev) and
   [FastAPI](https://fastapi.tiangolo.com), under their own open-source licences.
 - [Inter](https://rsms.me/inter/), SIL Open Font Licence 1.1.
+- Lakes, rivers, built-up areas and main roads on the map from [Natural Earth](https://www.naturalearthdata.com),
+  which is in the public domain. The map is bundled with the site and loads nothing from outside.
 - County outlines derived from [us-atlas](https://github.com/topojson/us-atlas), which is
   built from US Census Bureau cartographic boundary files.
 - The ISACA West Florida Chapter logo is a trademark of ISACA and is not covered by any
