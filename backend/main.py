@@ -4,9 +4,10 @@ Run:  uvicorn backend.main:app --reload
 
 Every /api endpoint that describes members takes the same optional filters, which
 combine: seniority, county, job_function and credential. Each returns counts, never
-a member row.
+a member row. All SQL here is fixed text; caller input is only ever bound as a value.
 """
 import datetime as dt
+import json
 import os
 import pathlib
 import sqlite3
@@ -51,47 +52,43 @@ def meta(con):
 
 # ---------------------------------------------------------------- filters
 
-CLAUSES = {
-    "seniority": "m.seniority = ?",
-    "county": "m.county = ?",
-    "job_function": "m.job_function = ?",
-    "credential": "EXISTS (SELECT 1 FROM member_certs c WHERE c.member_id = m.id AND c.cert = ?)",
-}
+# Every statement in this file is fixed text. Whatever a caller sends is bound as a value,
+# never placed in the SQL. This one statement applies the member filters: it copies the
+# members they select into `sel`, a temporary table that lives for one request, and every
+# member query below reads `sel`.
+SELECT_MEMBERS = """
+CREATE TEMP TABLE sel AS
+SELECT m.* FROM members m
+WHERE (:seniority IS NULL OR m.seniority = :seniority)
+  AND (:county IS NULL OR m.county = :county)
+  AND (:job_function IS NULL OR m.job_function = :job_function)
+  AND (:credential IS NULL OR EXISTS (SELECT 1 FROM member_certs c WHERE c.member_id = m.id AND c.cert = :credential))
+"""
 
 
-class Filters:
-    """The filters every member endpoint accepts. `exclude` drops one of them for a single query,
+def selected(
+    seniority: Optional[str] = Query(None, description="Seniority group, as listed by /api/meta"),
+    county: Optional[str] = Query(None, description="Florida county of the member's home ZIP code"),
+    job_function: Optional[str] = Query(None, description="Job function, as listed by /api/meta"),
+    credential: Optional[str] = Query(None, description="An ISACA credential the member holds, such as CISA"),
+    exclude: Optional[str] = Query(None, description="Name of one filter to ignore for this request"),
+    con=Depends(db),
+):
+    """The filters every member endpoint accepts. `exclude` drops one of them for the request,
     so a chart that sets a filter can still show the options beside the chosen one."""
-
-    def __init__(
-        self,
-        seniority: Optional[str] = Query(None, description="Seniority group, as listed by /api/meta"),
-        county: Optional[str] = Query(None, description="Florida county of the member's home ZIP code"),
-        job_function: Optional[str] = Query(None, description="Job function, as listed by /api/meta"),
-        credential: Optional[str] = Query(None, description="An ISACA credential the member holds, such as CISA"),
-        exclude: Optional[str] = Query(None, description="Name of one filter to ignore for this request"),
-    ):
-        self.values = {"seniority": seniority, "county": county, "job_function": job_function, "credential": credential}
-        self.exclude = exclude
-
-    def where(self, extra=None):
-        parts, args = [], []
-        for name, value in self.values.items():
-            if value is not None and name != self.exclude:
-                parts.append(CLAUSES[name])
-                args.append(value)
-        if extra:
-            parts.append(extra)
-        return ("WHERE " + " AND ".join(parts)) if parts else "", args
+    values = {"seniority": seniority, "county": county, "job_function": job_function, "credential": credential}
+    if exclude in values:
+        values[exclude] = None
+    con.execute(SELECT_MEMBERS, values)
+    return con
 
 
 def share(count, total):
     return round(100 * count / total, 1) if total else 0.0
 
 
-def total(con, f):
-    where, args = f.where()
-    return con.execute("SELECT COUNT(*) FROM members m %s" % where, args).fetchone()[0]
+def total(con):
+    return con.execute("SELECT COUNT(*) FROM sel").fetchone()[0]
 
 
 def ordered(items, order=None):
@@ -129,29 +126,27 @@ def get_meta(con=Depends(db)):
 
 
 @app.get("/api/summary")
-def summary(f: Filters = Depends(), con=Depends(db)):
+def summary(con=Depends(selected)):
     """Headline counts for the members the filters select."""
     m = meta(con)
     as_of = dt.date.fromisoformat(m["as_of"])
-    where, args = f.where()
     one = con.execute(
         """SELECT COUNT(*) AS members,
-                  COALESCE(SUM(m.join_date >= ?), 0) AS new_90d,
-                  COALESCE(SUM(m.join_date >= ?), 0) AS new_12mo,
+                  COALESCE(SUM(m.join_date >= :d90), 0) AS new_90d,
+                  COALESCE(SUM(m.join_date >= :d365), 0) AS new_12mo,
                   COALESCE(SUM(m.n_certs > 0), 0) AS certified,
-                  COALESCE(SUM(m.expiry_date <= ?), 0) AS renewal_due,
+                  COALESCE(SUM(m.expiry_date <= :year_end), 0) AS renewal_due,
                   COALESCE(SUM(m.in_florida), 0) AS in_florida,
-                  COALESCE(SUM(EXISTS (SELECT 1 FROM member_certs c WHERE c.member_id = m.id AND c.cert IN (%s))), 0) AS ai_cert_holders
-           FROM members m %s""" % (", ".join("?" * len(classify.AI_CERTS)), where),
-        [str(as_of - dt.timedelta(days=90)), str(as_of - dt.timedelta(days=365)), "%d-12-31" % as_of.year,
-         *classify.AI_CERTS, *args],
+                  COALESCE(SUM(EXISTS (SELECT 1 FROM member_certs c WHERE c.member_id = m.id
+                                       AND c.cert IN (SELECT value FROM json_each(:ai_certs)))), 0) AS ai_cert_holders
+           FROM sel m""",
+        {"d90": str(as_of - dt.timedelta(days=90)), "d365": str(as_of - dt.timedelta(days=365)),
+         "year_end": "%d-12-31" % as_of.year, "ai_certs": json.dumps(list(classify.AI_CERTS))},
     ).fetchone()
     n = one["members"]
-    t_where, t_args = f.where("m.tenure_years IS NOT NULL")
-    tenures = [r[0] for r in con.execute("SELECT m.tenure_years FROM members m %s" % t_where, t_args)]
-    c_where, c_args = f.where("m.county IS NOT NULL")
-    top = rows(con, "SELECT m.county AS county, COUNT(*) AS members FROM members m %s GROUP BY m.county ORDER BY members DESC, county"
-               % c_where, c_args)
+    tenures = [r[0] for r in con.execute("SELECT m.tenure_years FROM sel m WHERE m.tenure_years IS NOT NULL")]
+    top = rows(con, """SELECT m.county AS county, COUNT(*) AS members FROM sel m WHERE m.county IS NOT NULL
+                       GROUP BY m.county ORDER BY members DESC, county""")
     everyone = con.execute("SELECT COUNT(*) FROM members").fetchone()[0]
     return {
         "as_of": m["as_of"],
@@ -178,90 +173,86 @@ def summary(f: Filters = Depends(), con=Depends(db)):
     }
 
 
-def renewal_case(con):
-    year = dt.date.fromisoformat(meta(con)["as_of"]).year
-    due, paid = "Due by 31 Dec %d" % year, "Paid into %d" % (year + 1)
-    return "CASE WHEN m.expiry_date <= '%d-12-31' THEN '%s' ELSE '%s' END" % (year, due, paid), [due, paid]
-
-
+# One complete statement per dimension, with the order to list its categories in (None: largest first).
 DIMENSIONS = {
-    "seniority": ("m.seniority", classify.SENIORITY),
-    "job_function": ("m.job_function", None),
-    "professional_area": ("COALESCE(m.professional_area, 'Not stated')", None),
-    "member_level": ("m.member_level", classify.MEMBER_LEVELS),
-    "member_type": ("m.member_type", None),
-    "gender": ("m.gender", classify.GENDERS),
-    "tenure": ("m.tenure_band", classify.TENURE_BANDS),
-    "credentials_held": ("CASE m.n_certs WHEN 0 THEN 'None' WHEN 1 THEN '1' WHEN 2 THEN '2' ELSE '3 or more' END",
-                         classify.CERT_COUNTS),
-    "renewal": None,
+    "seniority": ("SELECT m.seniority AS category, COUNT(*) AS members FROM sel m GROUP BY category", classify.SENIORITY),
+    "job_function": ("SELECT m.job_function AS category, COUNT(*) AS members FROM sel m GROUP BY category", None),
+    "professional_area": ("""SELECT COALESCE(m.professional_area, 'Not stated') AS category, COUNT(*) AS members
+                             FROM sel m GROUP BY category""", None),
+    "member_level": ("SELECT m.member_level AS category, COUNT(*) AS members FROM sel m GROUP BY category", classify.MEMBER_LEVELS),
+    "member_type": ("SELECT m.member_type AS category, COUNT(*) AS members FROM sel m GROUP BY category", None),
+    "gender": ("SELECT m.gender AS category, COUNT(*) AS members FROM sel m GROUP BY category", classify.GENDERS),
+    "tenure": ("SELECT m.tenure_band AS category, COUNT(*) AS members FROM sel m GROUP BY category", classify.TENURE_BANDS),
+    "credentials_held": ("""SELECT CASE m.n_certs WHEN 0 THEN 'None' WHEN 1 THEN '1' WHEN 2 THEN '2' ELSE '3 or more' END AS category,
+                                   COUNT(*) AS members
+                            FROM sel m GROUP BY category""", classify.CERT_COUNTS),
+    "renewal": ("""SELECT CASE WHEN m.expiry_date <= :year_end THEN :due ELSE :paid END AS category, COUNT(*) AS members
+                   FROM sel m GROUP BY category""", None),
 }
 
 
 @app.get("/api/breakdown/{dimension}")
-def breakdown(dimension: str, f: Filters = Depends(), con=Depends(db)):
+def breakdown(dimension: str, con=Depends(selected)):
     """Members by category for one dimension. Shares are of the members the filters select."""
     if dimension not in DIMENSIONS:
         raise HTTPException(404, "Unknown dimension. Choose one of: " + ", ".join(DIMENSIONS))
-    expr, order = renewal_case(con) if dimension == "renewal" else DIMENSIONS[dimension]
-    where, args = f.where()
-    n = total(con, f)
-    found = rows(con, "SELECT %s AS category, COUNT(*) AS members FROM members m %s GROUP BY category" % (expr, where), args)
-    found = [dict(r, share=share(r["members"], n)) for r in found if r["category"] is not None]
+    sql, order = DIMENSIONS[dimension]
+    args = {}
+    if dimension == "renewal":
+        year = dt.date.fromisoformat(meta(con)["as_of"]).year
+        args = {"year_end": "%d-12-31" % year, "due": "Due by 31 Dec %d" % year, "paid": "Paid into %d" % (year + 1)}
+        order = [args["due"], args["paid"]]
+    n = total(con)
+    found = [dict(r, share=share(r["members"], n)) for r in rows(con, sql, args) if r["category"] is not None]
     return {"dimension": dimension, "total": n, "rows": ordered(found, order)}
 
 
 @app.get("/api/certifications")
-def certifications(f: Filters = Depends(), con=Depends(db)):
+def certifications(con=Depends(selected)):
     """Members holding each ISACA credential. A member with several counts under each."""
-    where, args = f.where()
-    n = total(con, f)
-    found = rows(con, """SELECT c.cert AS cert, COUNT(*) AS holders FROM member_certs c JOIN members m ON m.id = c.member_id
-                         %s GROUP BY c.cert ORDER BY holders DESC, cert""" % where, args)
+    n = total(con)
+    found = rows(con, """SELECT c.cert AS cert, COUNT(*) AS holders FROM member_certs c JOIN sel m ON m.id = c.member_id
+                         GROUP BY c.cert ORDER BY holders DESC, cert""")
     return {"total": n, "rows": [dict(r, share=share(r["holders"], n)) for r in found]}
 
 
 @app.get("/api/counties")
-def counties(f: Filters = Depends(), con=Depends(db)):
+def counties(con=Depends(selected)):
     """Members by Florida county of their home ZIP code."""
     as_of = dt.date.fromisoformat(meta(con)["as_of"])
-    where, args = f.where("m.county IS NOT NULL")
-    n = total(con, f)
+    n = total(con)
     found = rows(con, """SELECT m.county AS county, COUNT(*) AS members, SUM(m.join_date >= ?) AS new_12mo,
                                 SUM(m.n_certs > 0) AS certified
-                         FROM members m %s GROUP BY m.county ORDER BY members DESC, county""" % where,
-                 [str(as_of - dt.timedelta(days=365)), *args])
+                         FROM sel m WHERE m.county IS NOT NULL GROUP BY m.county ORDER BY members DESC, county""",
+                 [str(as_of - dt.timedelta(days=365))])
     return {"total": n, "rows": [dict(r, share=share(r["members"], n)) for r in found]}
 
 
 @app.get("/api/zips")
-def zips(f: Filters = Depends(), con=Depends(db)):
+def zips(con=Depends(selected)):
     """Members by Florida home ZIP code, with each ZIP's centre point."""
-    where, args = f.where()
     return {"rows": rows(con, """SELECT z.zip AS zip, z.place AS place, z.county AS county, z.lat AS lat, z.lon AS lon,
                                         COUNT(*) AS members
-                                 FROM members m JOIN zips z ON z.zip = m.zip %s
-                                 GROUP BY z.zip ORDER BY members DESC, z.zip""" % where, args)}
+                                 FROM sel m JOIN zips z ON z.zip = m.zip
+                                 GROUP BY z.zip ORDER BY members DESC, z.zip""")}
 
 
 @app.get("/api/cities")
-def cities(f: Filters = Depends(), con=Depends(db)):
+def cities(con=Depends(selected)):
     """Florida home cities with three or more of the selected members."""
-    where, args = f.where("m.city IS NOT NULL")
-    n = total(con, f)
-    found = rows(con, """SELECT m.city AS city, COUNT(*) AS members FROM members m %s
-                         GROUP BY m.city HAVING COUNT(*) >= %d ORDER BY members DESC, city""" % (where, MIN_GROUP), args)
+    n = total(con)
+    found = rows(con, """SELECT m.city AS city, COUNT(*) AS members FROM sel m WHERE m.city IS NOT NULL
+                         GROUP BY m.city HAVING COUNT(*) >= ? ORDER BY members DESC, city""", [MIN_GROUP])
     return {"total": n, "rows": [dict(r, share=share(r["members"], n)) for r in found]}
 
 
 @app.get("/api/region-function")
-def region_function(f: Filters = Depends(), con=Depends(db)):
+def region_function(con=Depends(selected)):
     """Members by home region (the six largest counties, the rest of Florida, outside Florida) and job function."""
     regions = meta(con)["top_counties"].split("|") + ["Other Florida", "Outside Florida"]
     functions = [r[0] for r in con.execute("SELECT job_function FROM members GROUP BY job_function ORDER BY COUNT(*) DESC, job_function")]
-    where, args = f.where()
     counts = {(r["region"], r["job_function"]): r["members"] for r in rows(
-        con, "SELECT m.region AS region, m.job_function AS job_function, COUNT(*) AS members FROM members m %s GROUP BY 1, 2" % where, args)}
+        con, "SELECT m.region AS region, m.job_function AS job_function, COUNT(*) AS members FROM sel m GROUP BY 1, 2")}
     out = []
     for region in regions:
         region_total = sum(v for (r, _), v in counts.items() if r == region)
@@ -272,31 +263,29 @@ def region_function(f: Filters = Depends(), con=Depends(db)):
 
 
 @app.get("/api/joins/{by}")
-def joins(by: str, f: Filters = Depends(), con=Depends(db)):
+def joins(by: str, con=Depends(selected)):
     """Current members by the year (from 2000) or month (last 24) they joined. Members who have
     since left are not counted, so this is not a growth trend."""
     as_of = dt.date.fromisoformat(meta(con)["as_of"])
     if by == "year":
-        where, args = f.where("m.join_date IS NOT NULL")
-        found = dict(con.execute("SELECT CAST(substr(m.join_date, 1, 4) AS INTEGER), COUNT(*) FROM members m %s GROUP BY 1" % where, args).fetchall())
+        found = dict(con.execute("""SELECT CAST(substr(m.join_date, 1, 4) AS INTEGER), COUNT(*) FROM sel m
+                                    WHERE m.join_date IS NOT NULL GROUP BY 1""").fetchall())
         return {"rows": [{"year": y, "members": found.get(y, 0)} for y in range(2000, as_of.year + 1)]}
     if by == "month":
         first = as_of.year * 12 + as_of.month - 1 - 24
         months = ["%04d-%02d" % (k // 12, k % 12 + 1) for k in range(first, first + 25)]
-        where, args = f.where("m.join_date >= ?")
-        found = dict(con.execute("SELECT substr(m.join_date, 1, 7), COUNT(*) FROM members m %s GROUP BY 1" % where,
-                                 [*args, months[0] + "-01"]).fetchall())
+        found = dict(con.execute("SELECT substr(m.join_date, 1, 7), COUNT(*) FROM sel m WHERE m.join_date >= ? GROUP BY 1",
+                                 [months[0] + "-01"]).fetchall())
         return {"rows": [{"month": mth + "-01", "members": found.get(mth, 0)} for mth in months]}
     raise HTTPException(404, "Choose /api/joins/year or /api/joins/month")
 
 
 @app.get("/api/employers")
-def employers(f: Filters = Depends(), con=Depends(db)):
+def employers(con=Depends(selected)):
     """Employers with three or more of the selected members, common name variants merged."""
-    where, args = f.where("m.employer IS NOT NULL")
-    n = total(con, f)
-    found = rows(con, """SELECT m.employer AS employer, COUNT(*) AS members FROM members m %s
-                         GROUP BY m.employer HAVING COUNT(*) >= %d ORDER BY members DESC, employer""" % (where, MIN_GROUP), args)
+    n = total(con)
+    found = rows(con, """SELECT m.employer AS employer, COUNT(*) AS members FROM sel m WHERE m.employer IS NOT NULL
+                         GROUP BY m.employer HAVING COUNT(*) >= ? ORDER BY members DESC, employer""", [MIN_GROUP])
     return {"total": n, "rows": [dict(r, share=share(r["members"], n)) for r in found]}
 
 
@@ -324,18 +313,20 @@ def movement(month: Optional[str] = Query(None, description="A month as YYYY-MM;
     tot = {k: sum(r[k] for r in daily) for k in ("new_members", "transferred_in", "transferred_out")}
     joined = tot["new_members"] + tot["transferred_in"]
 
-    def named(kind, column):
-        return rows(con, """SELECT %s AS name, COUNT(*) AS members FROM movements
-                            WHERE kind = ? AND date BETWEEN ? AND ? AND %s IS NOT NULL
-                            GROUP BY 1 ORDER BY members DESC, name""" % (column, column), [kind, lo, hi])
+    by_type = """SELECT member_type AS name, COUNT(*) AS members FROM movements
+                 WHERE kind = ? AND date BETWEEN ? AND ? AND member_type IS NOT NULL
+                 GROUP BY 1 ORDER BY members DESC, name"""
+    by_chapter = """SELECT chapter AS name, COUNT(*) AS members FROM movements
+                    WHERE kind = ? AND date BETWEEN ? AND ? AND chapter IS NOT NULL
+                    GROUP BY 1 ORDER BY members DESC, name"""
 
     return {
         "months": months, "month": month, "from": lo, "to": hi,
         "totals": dict(tot, joined=joined, net=joined - tot["transferred_out"]),
         "daily": daily,
-        "new_member_types": named("new", "member_type"),
-        "transferred_in_from": named("transfer_in", "chapter"),
-        "transferred_out_to": named("transfer_out", "chapter"),
+        "new_member_types": rows(con, by_type, ["new", lo, hi]),
+        "transferred_in_from": rows(con, by_chapter, ["transfer_in", lo, hi]),
+        "transferred_out_to": rows(con, by_chapter, ["transfer_out", lo, hi]),
     }
 
 

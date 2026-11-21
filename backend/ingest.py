@@ -48,6 +48,16 @@ CREATE INDEX member_certs_member ON member_certs(member_id);
 CREATE INDEX member_certs_cert ON member_certs(cert);
 """
 
+MEMBER_COLUMNS = ("seniority", "job_function", "professional_area", "member_level", "member_type", "gender", "employer",
+                  "city", "zip", "county", "in_florida", "region", "join_date", "expiry_date", "tenure_years",
+                  "tenure_band", "n_certs")
+INSERT_MEMBER = """
+INSERT INTO members (id, seniority, job_function, professional_area, member_level, member_type, gender, employer,
+                     city, zip, county, in_florida, region, join_date, expiry_date, tenure_years, tenure_band, n_certs)
+VALUES (:id, :seniority, :job_function, :professional_area, :member_level, :member_type, :gender, :employer,
+        :city, :zip, :county, :in_florida, :region, :join_date, :expiry_date, :tenure_years, :tenure_band, :n_certs)
+"""
+
 
 def report_date(path):
     """The 'as of' date ISACA prints in the first cell of a report."""
@@ -155,12 +165,13 @@ def write_db(db_path, as_of, members, certs, zips, top_counties, movements=None,
 
     order = list(members.index)
     random.shuffle(order)
-    columns = list(members.columns)
+    missing = set(MEMBER_COLUMNS) ^ set(members.columns)
+    if missing:
+        raise ValueError("Roster columns do not match the members table: %s" % sorted(missing))
     for new_id, idx in enumerate(order, start=1):
         row = members.loc[idx]
-        values = [None if pd.isna(row[c]) else row[c].item() if hasattr(row[c], "item") else row[c] for c in columns]
-        con.execute("INSERT INTO members (id, %s) VALUES (?, %s)" % (", ".join(columns), ", ".join("?" * len(columns))),
-                    [new_id] + values)
+        values = {c: None if pd.isna(row[c]) else row[c].item() if hasattr(row[c], "item") else row[c] for c in MEMBER_COLUMNS}
+        con.execute(INSERT_MEMBER, dict(values, id=new_id))
         con.executemany("INSERT INTO member_certs VALUES (?, ?)",
                         [(new_id, c) for c in classify.CERTS if certs.loc[idx, c]])
     con.executemany("INSERT INTO zips VALUES (:zip, :place, :county, :lat, :lon)", zips)

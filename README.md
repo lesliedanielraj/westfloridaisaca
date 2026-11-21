@@ -145,10 +145,12 @@ ash --mode local
 
 The reports are written to `.ash/ash_output/reports/`; open `ash.html`.
 
-`.ashrc.yaml` lists the findings that were reviewed and accepted, each with its reason. The
-main one: the scanner flags SQL that is assembled from strings, and the API does assemble
-its `WHERE` clauses, but only from fixed text in the code. Every value a caller sends is
-bound as a parameter, and a test checks that.
+`.ashrc.yaml` lists the findings that were reviewed and accepted, each with its reason.
+There are two: `assert` in the tests, and the public commit ID in the workflow file, which
+the secret scanner mistakes for a key.
+
+Every SQL statement in `backend/` is fixed text, and whatever a caller sends is bound as a
+value. Keep it that way: a statement assembled from strings fails the scan.
 
 ## Layout
 
