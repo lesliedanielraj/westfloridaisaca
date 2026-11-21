@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { SIGNED_OUT } from './auth.jsx';
 
 // Builds "?a=1&b=2", leaving out empty values.
 export function query(params) {
@@ -11,7 +12,8 @@ export function query(params) {
 }
 
 async function getJson(url, signal) {
-  const res = await fetch(url, { signal });
+  const res = await fetch(url, { signal, credentials: 'same-origin' });
+  if (res.status === 401) window.dispatchEvent(new Event(SIGNED_OUT)); // the session ended: show the sign-in page
   if (!res.ok) {
     const body = await res.json().catch(() => null);
     throw new Error((body && body.detail) || `${res.status} ${res.statusText}`);

@@ -24,8 +24,9 @@ The ISACA reports are confidential and for chapter leaders only. This repository
 code. `.gitignore` keeps out the reports (`raw/`), the database (`data/`) and the built
 site (`dist/`).
 
-**There is no sign-in yet.** The server listens on this computer only. Do not put it on
-the internet until sign-in is added.
+**The server listens on this computer only**, and every page and API route needs a
+sign-in (see "Signing in"). Before it goes on the internet it also needs `https`, a second
+factor and the open items in [the threat model](docs/threat-model.md).
 
 ## How members are protected
 
@@ -68,6 +69,35 @@ What this does not do:
 - **Small counts still appear inside charts**, such as a credential held by three members
   or a transfer from one chapter.
 - **Deleting a report does not scrub it** from the disk, the Trash or backups.
+
+## Signing in
+
+Nothing but the sign-in page is shown, and no API route but the health check answers,
+until someone signs in. Accounts are kept in `data/accounts.db`, apart from the member data.
+
+```sh
+python -m backend.accounts add --email you@example.org --role admin   # asks for a password
+python -m backend.accounts list
+python -m backend.accounts set-password --email you@example.org
+python -m backend.accounts disable --email someone@example.org        # or: enable
+python -m backend.accounts sign-out --email someone@example.org       # ends their sessions
+```
+
+On a Mac, `./run-local.command` asks for the first administrator if there is none, and
+`./add-user.command` adds more. There are two roles, administrator and board member; both
+see the same pages today.
+
+| Protection | How |
+|---|---|
+| Passwords | Never stored. An Argon2id hash is, with a salt per password. 12 to 128 characters. |
+| Sessions | A random token in a cookie that scripts cannot read and other sites cannot send. Only its hash is stored. Ends after 8 hours, or 2 hours unused, on sign-out, on a password change, or when the account is disabled. |
+| Guessing | Five wrong passwords lock the account for 15 minutes; ten tries a minute per address. A wrong email and a wrong password get the same answer. |
+| Other sites | A change requested from another site is refused, and the site cannot be shown in a frame. |
+| Headers | A content security policy that allows scripts only from the site, and the usual hardening headers. |
+| Record | Sign-ins, failures, sign-outs and account changes are kept in an audit table. |
+
+There is no "forgot password" page: an administrator resets a password with the command
+above. There is no second factor yet.
 
 ## Monthly loads
 
@@ -152,7 +182,15 @@ python -m pytest backend
 
 ## The API
 
-Interactive documentation is at <http://127.0.0.1:8000/docs> while the server runs.
+Every route below needs a signed-in session. The interactive documentation pages are switched
+off; a signed-in user can read the API's description at `/api/openapi.json`.
+
+| Endpoint | Returns |
+|---|---|
+| `POST /api/auth/login` | Signs in with `{email, password}` and sets the session cookie |
+| `POST /api/auth/logout` | Ends the session |
+| `GET /api/auth/me` | Who is signed in |
+| `GET /api/health` | Whether the server is up. The only route open to anyone. |
 
 | Endpoint | Returns |
 |---|---|
@@ -203,6 +241,10 @@ of people.
 
 ## Security scan
 
+A passing pipeline means no known-bad pattern was found, not that nothing is missing: a
+scanner cannot tell that a route was meant to need a sign-in. [The threat model](docs/threat-model.md)
+covers what the tools cannot, and is reviewed when a page is added.
+
 Every pull request into `main` is scanned with [ASH](https://github.com/awslabs/automated-security-helper),
 the AWS Automated Security Helper (`.github/workflows/ash.yml`). It checks the Python and
 JavaScript code, the dependencies, the workflow files and the history for secrets. A finding
@@ -213,6 +255,8 @@ not for personal details:
 
 | Check | Fails the pull request if |
 |---|---|
+| Tests and live scan | a backend test fails, including the one that calls every API route without a sign-in; [Schemathesis](https://schemathesis.readthedocs.io) finds a crash or a wrong answer while fuzzing the API; or [OWASP ZAP](https://www.zaproxy.org) raises an alert against the running site. Both run against made-up data from `tools/demo_setup.py`. |
+| CodeQL | GitHub's code analysis finds a flaw. It also runs weekly and on `main`. |
 | No member data | a report, database, archive or key file is tracked, whatever `.gitignore` says |
 | No personal details | [Presidio](https://microsoft.github.io/presidio/) finds an email address, a phone, Social Security or card number, or what looks like a person's first and last name, in the contents of any tracked file |
 
@@ -242,12 +286,15 @@ value. Keep it that way: a statement assembled from strings fails the scan.
 backend/
   ingest.py        a month's reports -> data/members.db, personal details removed
   privacy.py       the pseudonym key, the five-member floor and the checks
+  accounts.py      accounts, passwords, sessions and the audit record
   pii_allowlist.txt  firms named after people, checked by hand
   classify.py      seniority, job function and employer rules
   main.py          the API
   tests/           checks on the ingest and API, with a made-up roster
 .github/workflows/ash.yml   security scan and the two data checks on pull requests into main
 tools/pii_scan.py  reads every tracked file for personal details
+tools/demo_setup.py  a made-up database and account, for the checks and for trying the site out
+docs/threat-model.md  what could go wrong, what stops it, and what is still open
 .ashrc.yaml        scan settings
 frontend/
   src/App.jsx      the site's sections, the address each lives at, and the appearance controls

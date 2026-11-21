@@ -47,3 +47,7 @@ node_modules/
 .idea/
 .vscode/
 .DS_Store
+
+# Scratch files the API fuzzer leaves behind
+.schemathesis/
+.hypothesis/

@@ -1,0 +1,22 @@
+# Dependabot opens a pull request when a dependency has a newer version. Each one goes through the same
+# checks as any other change. Security alerts and automatic security fixes are switched on separately,
+# in the repository's settings.
+version: 2
+updates:
+  - package-ecosystem: pip
+    directories: ["/backend", "/tools", "/static-dashboard"]
+    schedule: { interval: weekly, day: monday }
+    open-pull-requests-limit: 5
+    groups:
+      python: { patterns: ["*"] }
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule: { interval: weekly, day: monday }
+    open-pull-requests-limit: 5
+    groups:
+      javascript: { patterns: ["*"] }
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly, day: monday }
+    groups:
+      actions: { patterns: ["*"] }

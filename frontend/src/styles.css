@@ -591,3 +591,24 @@ button.wf-chip { cursor: pointer; }
 @media (prefers-color-scheme: dark) { :root[data-accent="indigo"]:not([data-theme="light"]) { --wf-c1: #707ff1; --wf-c2: #a58a07; --wf-c3: #c85eb4; --wf-c4: #01a760; } }
 :root[data-accent="indigo"][data-theme="dark"] { --wf-c1: #707ff1; --wf-c2: #a58a07; --wf-c3: #c85eb4; --wf-c4: #01a760; }
 .wf-settings-panel .wf-swatches { display: grid; grid-template-columns: repeat(6, 28px); gap: 10px; justify-content: space-between; }
+
+/* Sign-in page, and the account block in the settings panel */
+.wf-signin { flex-direction: column; align-items: center; justify-content: center; gap: 20px; padding: 24px 16px; }
+.wf-signin-card { width: 100%; max-width: 380px; padding: 28px 28px 30px; background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: 14px; }
+.wf-signin-brand { display: inline-block; margin-bottom: 20px; }
+.wf-signin-brand img { height: 40px; }
+.wf-signin-title { margin: 0 0 6px; font-family: var(--font-anthropic-sans); font-size: 1.5rem; font-weight: var(--wf-bold); letter-spacing: -0.01em; }
+.wf-signin-note { margin: 0 0 20px; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); line-height: 1.5; }
+.wf-field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+.wf-field input { font: inherit; font-size: var(--cds-font-size-body); color: var(--color-fg); background: var(--color-bg); border: 1px solid var(--color-border-line); border-radius: 8px; padding: 10px 12px; }
+.wf-field input:focus-visible { outline: 2px solid var(--wf-c1); outline-offset: 1px; border-color: transparent; }
+.wf-signin-problem { margin: 2px 0 14px; padding: 9px 12px; border-radius: 8px; font-size: var(--cds-font-size-caption); line-height: 1.45; color: var(--color-fg); background: color-mix(in srgb, var(--color-bad, #c0392b) 13%, transparent); border: 1px solid color-mix(in srgb, var(--color-bad, #c0392b) 45%, transparent); }
+.wf-signin-go { width: 100%; font: inherit; font-weight: var(--cds-font-weight-medium); color: var(--color-bg); background: var(--color-fg); border: 0; border-radius: 8px; padding: 11px 16px; cursor: pointer; }
+.wf-signin-go:disabled { opacity: 0.45; cursor: default; }
+.wf-signin-go:focus-visible { outline: 2px solid var(--wf-c1); outline-offset: 2px; }
+.wf-account { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 8px 0 4px; padding-bottom: 12px; border-bottom: 1px solid var(--color-border-line); }
+.wf-account-who { display: flex; flex-direction: column; min-width: 0; }
+.wf-account-email { font-size: var(--cds-font-size-caption); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wf-account-role { font-size: 11px; color: var(--color-fg-muted); }
+.wf-signout { flex: 0 0 auto; font: inherit; font-size: var(--cds-font-size-caption); color: var(--color-fg); background: var(--color-bg); border: 1px solid var(--color-border-line); border-radius: 8px; padding: 6px 10px; cursor: pointer; }
+.wf-signout:hover { background: color-mix(in srgb, var(--color-fg) 7%, transparent); }
