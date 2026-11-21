@@ -530,3 +530,21 @@ button.wf-chip { cursor: pointer; }
   .wf-meterlist { grid-template-columns: minmax(0, 1fr) auto; row-gap: 3px; }
   .wf-meterlist > .wf-bar-label { grid-column: 1 / -1; margin-top: 7px; }
 }
+
+/* "Powered by Adhvitech LLC", in the navigation pane and the page footer */
+.wf-powered { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--color-fg-muted); white-space: nowrap; }
+.wf-powered-name { color: var(--color-fg); font-weight: var(--cds-font-weight-medium); }
+.wf-powered-logo { height: 20px; width: auto; max-width: 96px; object-fit: contain; }
+.wf-only-dark { display: none; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .wf-only-dark { display: inline; } :root:not([data-theme="light"]) .wf-only-light { display: none; } }
+:root[data-theme="dark"] .wf-only-dark { display: inline; }
+:root[data-theme="dark"] .wf-only-light { display: none; }
+.wf-side-foot { padding: 12px 16px 16px; border-top: 1px solid var(--color-border-line); }
+.wf-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; width: 100%; max-width: 1336px; margin: auto auto 0; padding: 14px 28px 20px; border-top: 1px solid var(--color-border-line); font-size: 11.5px; color: var(--color-fg-muted); }
+.wf-content { flex: 0 0 auto; }
+@media (min-width: 861px) {
+  .wf-shell-collapsed .wf-side-foot { display: flex; justify-content: center; padding: 12px 0 16px; }
+  .wf-shell-collapsed .wf-powered-by, .wf-shell-collapsed .wf-side .wf-powered-name { display: none; }
+  .wf-shell-collapsed .wf-side .wf-powered:not(:has(img)) { display: none; }
+}
+@media (max-width: 860px) { .wf-footer { padding: 12px 16px 18px; } }

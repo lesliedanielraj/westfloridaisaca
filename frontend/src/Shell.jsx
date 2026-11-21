@@ -1,6 +1,24 @@
 import { useEffect, useState } from 'react';
 import logo from './assets/wf_isaca_logo.png';
 
+// The Adhvitech logo, if its file is in src/assets/brand (see the README there). Without it the words stand alone.
+const BRAND = import.meta.glob('./assets/brand/adhvitech*.{png,svg,webp,jpg}', { eager: true, query: '?url', import: 'default' });
+const brandFile = (dark) => Object.entries(BRAND).find(([path]) => /adhvitech-dark\./.test(path) === dark);
+const POWERED_LOGO = (brandFile(false) || [])[1];
+const POWERED_LOGO_DARK = (brandFile(true) || [])[1];
+
+// "Powered by Adhvitech LLC", with the logo when there is one. `compact` shows the logo alone, for the collapsed pane.
+export function PoweredBy({ compact }) {
+  return (
+    <div className={`wf-powered${compact ? ' wf-powered-compact' : ''}`} title="Powered by Adhvitech LLC">
+      <span className="wf-powered-by">Powered by</span>
+      {POWERED_LOGO && <img className={`wf-powered-logo${POWERED_LOGO_DARK ? ' wf-only-light' : ''}`} src={POWERED_LOGO} alt="" />}
+      {POWERED_LOGO_DARK && <img className="wf-powered-logo wf-only-dark" src={POWERED_LOGO_DARK} alt="" />}
+      <span className="wf-powered-name">Adhvitech LLC</span>
+    </div>
+  );
+}
+
 const PATHS = {
   home: <><path d="M3 10.5 12 3l9 7.5" /><path d="M5 9.5V20h5v-6h4v6h5V9.5" /></>,
   chart: <><path d="M4 20V4" /><path d="M4 20h16" /><path d="M8 20v-6" /><path d="M12 20V9" /><path d="M16 20v-9" /></>,
@@ -64,7 +82,7 @@ export default function Shell({ sections, current, title, tools, children }) {
             </a>
           ))}
         </nav>
-        <div className="wf-side-foot">ISACA West Florida Chapter</div>
+        <div className="wf-side-foot"><PoweredBy /></div>
       </aside>
       <button type="button" className="wf-scrim" aria-label="Close the navigation" tabIndex={open ? 0 : -1} onClick={() => setOpen(false)} />
       <div className="wf-main">
@@ -75,6 +93,10 @@ export default function Shell({ sections, current, title, tools, children }) {
           {tools}
         </header>
         <main className="wf-content">{children}</main>
+        <footer className="wf-footer">
+          <span>ISACA West Florida Chapter</span>
+          <PoweredBy />
+        </footer>
       </div>
     </div>
   );

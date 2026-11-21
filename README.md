@@ -268,6 +268,12 @@ chart colours were checked for colour-blind separation, in light and in dark, wi
 palette validator from the charting guidance the site follows. To add a theme, add its
 colours to `frontend/src/styles.css` and its name to `ACCENTS` in `frontend/src/App.jsx`.
 
+## Credit line
+
+"Powered by Adhvitech LLC" appears at the foot of the navigation pane and of every page.
+To show the Adhvitech logo beside it, put the file in `frontend/src/assets/brand/` (see the
+README there) and rebuild.
+
 ## Third-party material
 
 - [React](https://react.dev), [d3](https://d3js.org), [Vite](https://vite.dev) and
