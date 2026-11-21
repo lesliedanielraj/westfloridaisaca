@@ -145,9 +145,7 @@ ash --mode local
 
 The reports are written to `.ash/ash_output/reports/`; open `ash.html`.
 
-`.ashrc.yaml` lists the findings that were reviewed and accepted, each with its reason.
-There are two: `assert` in the tests, and the public commit ID in the workflow file, which
-the secret scanner mistakes for a key.
+`.ashrc.yaml` holds the scan settings. No finding is suppressed.
 
 Every SQL statement in `backend/` is fixed text, and whatever a caller sends is bound as a
 value. Keep it that way: a statement assembled from strings fails the scan.
@@ -161,7 +159,7 @@ backend/
   main.py          the API
   tests/           checks on the ingest and API, with a made-up roster
 .github/workflows/ash.yml   security scan on pull requests into main
-.ashrc.yaml        scan settings and accepted findings
+.ashrc.yaml        scan settings
 frontend/
   src/App.jsx      header, filter bar and tabs
   src/pages/       one file per tab

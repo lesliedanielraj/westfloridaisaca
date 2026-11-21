@@ -3,6 +3,7 @@
 Run from the repository root:  python -m pytest backend
 """
 import sqlite3
+import unittest
 
 import pandas as pd
 import pytest
@@ -11,6 +12,7 @@ from fastapi.testclient import TestClient
 from backend import classify, ingest, main
 
 TITLE = "ISACA Chapter Member Roster\nTest Chapter (999)\nas of 11/18/2026 08:00:00 PM Chicago Time"
+check = unittest.TestCase()  # assertEqual and friends; a failure shows both sides
 MARKER = "ZZ-PRIVATE"  # stands in for every personal detail; must never reach the database
 
 
@@ -67,73 +69,78 @@ def client(tmp_path_factory):
 
 def test_no_personal_details_are_stored(client):
     _, db_path = client
-    assert MARKER.encode() not in db_path.read_bytes()
+    check.assertNotIn(MARKER.encode(), db_path.read_bytes())
     columns = {r[1] for r in sqlite3.connect(db_path).execute("PRAGMA table_info(members)")}
-    assert not columns & {"name", "first_name", "last_name", "email", "phone", "address", "member_id", "title"}
+    check.assertFalse(columns & {"name", "first_name", "last_name", "email", "phone", "address", "member_id", "title"})
 
 
 def test_summary_counts_everyone(client):
     api, _ = client
     s = api.get("/api/summary").json()
-    assert (s["members"], s["in_florida"], s["outside_florida"]) == (6, 5, 1)
-    assert (s["certified"], s["no_cert"]) == (3, 3)
-    assert s["new_90d"] == 2 and s["new_12mo"] == 3
-    assert s["top_county"] == "Hillsborough" and s["top_county_members"] == 3
+    check.assertEqual((s["members"], s["in_florida"], s["outside_florida"]), (6, 5, 1))
+    check.assertEqual((s["certified"], s["no_cert"]), (3, 3))
+    check.assertEqual(s["new_90d"], 2)
+    check.assertEqual(s["new_12mo"], 3)
+    check.assertEqual(s["top_county"], "Hillsborough")
+    check.assertEqual(s["top_county_members"], 3)
 
 
 def test_filters_combine(client):
     api, _ = client
-    assert api.get("/api/summary", params={"credential": "CISM"}).json()["members"] == 2
+    check.assertEqual(api.get("/api/summary", params={"credential": "CISM"}).json()["members"], 2)
     both = api.get("/api/summary", params={"credential": "CISM", "seniority": "C-suite and executives"}).json()
-    assert both["members"] == 1 and both["share_of_all"] == 16.7
-    assert api.get("/api/summary", params={"county": "Pinellas", "job_function": "Audit"}).json()["members"] == 1
-    assert api.get("/api/summary", params={"county": "Pinellas", "credential": "CISM"}).json()["members"] == 0
+    check.assertEqual(both["members"], 1)
+    check.assertEqual(both["share_of_all"], 16.7)
+    check.assertEqual(api.get("/api/summary", params={"county": "Pinellas", "job_function": "Audit"}).json()["members"], 1)
+    check.assertEqual(api.get("/api/summary", params={"county": "Pinellas", "credential": "CISM"}).json()["members"], 0)
 
 
 def test_exclude_keeps_the_other_choices(client):
     api, _ = client
     picked = {"seniority": "Staff and senior staff"}
-    assert len(api.get("/api/breakdown/seniority", params=picked).json()["rows"]) == 1
+    check.assertEqual(len(api.get("/api/breakdown/seniority", params=picked).json()["rows"]), 1)
     faceted = api.get("/api/breakdown/seniority", params={**picked, "exclude": "seniority"}).json()
-    assert faceted["total"] == 6 and len(faceted["rows"]) == 5
+    check.assertEqual(faceted["total"], 6)
+    check.assertEqual(len(faceted["rows"]), 5)
 
 
 def test_groupings(client):
     api, _ = client
     by = lambda dim: {r["category"]: r["members"] for r in api.get(f"/api/breakdown/{dim}").json()["rows"]}
-    assert by("seniority") == {"C-suite and executives": 1, "Directors, managers and consultants": 1,
-                               "Staff and senior staff": 2, "Students and academics": 1, "Not stated": 1}
-    assert by("job_function") == {"Security": 2, "Audit": 2, "Student and academic": 1, "Not stated": 1}
-    assert by("credentials_held") == {"None": 3, "1": 2, "2": 1}
+    check.assertEqual(by("seniority"), {"C-suite and executives": 1, "Directors, managers and consultants": 1,
+                               "Staff and senior staff": 2, "Students and academics": 1, "Not stated": 1})
+    check.assertEqual(by("job_function"), {"Security": 2, "Audit": 2, "Student and academic": 1, "Not stated": 1})
+    check.assertEqual(by("credentials_held"), {"None": 3, "1": 2, "2": 1})
 
 
 def test_small_groups_are_not_named(client):
     api, _ = client
     # Three known spellings of one employer merge and are listed; the one-person employer is not.
-    assert api.get("/api/employers").json()["rows"] == [{"employer": "PwC", "members": 3, "share": 50.0}]
-    assert [r["city"] for r in api.get("/api/cities").json()["rows"]] == ["Tampa"]
+    check.assertEqual(api.get("/api/employers").json()["rows"], [{"employer": "PwC", "members": 3, "share": 50.0}])
+    check.assertEqual([r["city"] for r in api.get("/api/cities").json()["rows"]], ["Tampa"])
 
 
 def test_geography(client):
     api, _ = client
-    assert {r["county"]: r["members"] for r in api.get("/api/counties").json()["rows"]} == {"Hillsborough": 3, "Pinellas": 2}
-    assert {r["zip"]: r["members"] for r in api.get("/api/zips").json()["rows"]} == {"33602": 2, "33606": 1, "33701": 2}
+    check.assertEqual({r["county"]: r["members"] for r in api.get("/api/counties").json()["rows"]}, {"Hillsborough": 3, "Pinellas": 2})
+    check.assertEqual({r["zip"]: r["members"] for r in api.get("/api/zips").json()["rows"]}, {"33602": 2, "33606": 1, "33701": 2})
 
 
 def test_movement(client):
     api, _ = client
     everything = api.get("/api/movement").json()
-    assert everything["totals"] == {"new_members": 2, "transferred_in": 1, "transferred_out": 1, "joined": 3, "net": 2}
-    assert len(everything["daily"]) == 91
+    check.assertEqual(everything["totals"], {"new_members": 2, "transferred_in": 1, "transferred_out": 1, "joined": 3, "net": 2})
+    check.assertEqual(len(everything["daily"]), 91)
     october = api.get("/api/movement", params={"month": "2026-10"}).json()
-    assert october["totals"]["joined"] == 2 and october["transferred_out_to"] == [{"name": "Denver", "members": 1}]
+    check.assertEqual(october["totals"]["joined"], 2)
+    check.assertEqual(october["transferred_out_to"], [{"name": "Denver", "members": 1}])
 
 
 def test_bad_requests(client):
     api, _ = client
-    assert api.get("/api/breakdown/shoe_size").status_code == 404
-    assert api.get("/api/movement", params={"month": "1999-01"}).status_code == 404
-    assert api.get("/api/joins/decade").status_code == 404
+    check.assertEqual(api.get("/api/breakdown/shoe_size").status_code, 404)
+    check.assertEqual(api.get("/api/movement", params={"month": "1999-01"}).status_code, 404)
+    check.assertEqual(api.get("/api/joins/decade").status_code, 404)
 
 
 def test_filter_values_are_data_not_sql(client):
@@ -142,7 +149,7 @@ def test_filter_values_are_data_not_sql(client):
     for hostile in ["' OR '1'='1", "x'; DROP TABLE members; --", '" OR 1=1 --']:
         for name in ("seniority", "county", "job_function", "credential", "exclude"):
             answer = api.get("/api/summary", params={name: hostile})
-            assert answer.status_code == 200
-            assert answer.json()["members"] == (6 if name == "exclude" else 0)
-    assert api.get("/api/breakdown/seniority; DROP TABLE members").status_code == 404
-    assert sqlite3.connect(db_path).execute("SELECT COUNT(*) FROM members").fetchone()[0] == 6
+            check.assertEqual(answer.status_code, 200)
+            check.assertEqual(answer.json()["members"], (6 if name == "exclude" else 0))
+    check.assertEqual(api.get("/api/breakdown/seniority; DROP TABLE members").status_code, 404)
+    check.assertEqual(sqlite3.connect(db_path).execute("SELECT COUNT(*) FROM members").fetchone()[0], 6)

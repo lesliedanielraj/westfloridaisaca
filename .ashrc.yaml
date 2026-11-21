@@ -1,11 +1,5 @@
 # Settings for ASH, the AWS Automated Security Helper. See "Security scan" in README.md.
+# Nothing is suppressed. To accept a finding, add it under global_settings.suppressions with a reason.
 project_name: westfloridaisaca
 global_settings:
   severity_threshold: MEDIUM
-  suppressions:
-    - path: backend/tests/**
-      rule_id: B101
-      reason: assert is how the tests check results
-    - path: .github/workflows/ash.yml
-      rule_id: SECRET-HEX-HIGH-ENTROPY-STRING
-      reason: The value is the public commit ID of the ASH v3.8.0 release, not a secret
