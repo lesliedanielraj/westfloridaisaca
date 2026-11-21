@@ -12,7 +12,8 @@ const kept = { transform: null, width: 0 };
 
 // Counties shaded by members, with a circle per home ZIP code. `picked` outlines one county.
 // With `onPick`, a click on a county that has members, or on one of its ZIP circles, calls it with the county's name.
-export default function FloridaMap({ counties, zips, picked, label, onPick }) {
+// With `onClear`, Reset also clears the picked county.
+export default function FloridaMap({ counties, zips, picked, label, onPick, onClear }) {
   const tip = useTip();
   const [ref, width] = useWidth();
   const svgRef = useRef(null);
@@ -70,7 +71,11 @@ export default function FloridaMap({ counties, zips, picked, label, onPick }) {
   const { k } = view;
   const labelFrom = k >= 4 ? 1 : k >= 2 ? 5 : 20;
   const zoomBy = (factor) => control.current && control.current.svg.call(control.current.behaviour.scaleBy, factor);
-  const reset = () => control.current && control.current.svg.call(control.current.behaviour.transform, zoomIdentity);
+  const reset = () => {
+    clearTimeout(clickTimer.current);
+    if (control.current) control.current.svg.call(control.current.behaviour.transform, zoomIdentity);
+    if (picked && onClear) onClear();
+  };
   // Waits a moment before picking, so the first click of a double-click does not filter. A drag never gets here:
   // the zoom behaviour swallows the click that ends one.
   const pick = (county) => {
@@ -130,7 +135,8 @@ export default function FloridaMap({ counties, zips, picked, label, onPick }) {
       <div className="wf-zoom">
         <button type="button" className="wf-zoom-btn" aria-label="Zoom in" onClick={() => zoomBy(1.6)}>+</button>
         <button type="button" className="wf-zoom-btn" aria-label="Zoom out" onClick={() => zoomBy(1 / 1.6)}>−</button>
-        <button type="button" className="wf-zoom-btn" aria-label="Reset the map view" onClick={reset} disabled={k === 1}>Reset</button>
+        <button type="button" className="wf-zoom-btn" aria-label={onClear ? 'Reset the map view and clear the county filter' : 'Reset the map view'}
+          onClick={reset} disabled={k === 1 && !(picked && onClear)}>Reset</button>
       </div>
     </div>
   );
