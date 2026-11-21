@@ -49,7 +49,7 @@ jobs:
       - name: Install Presidio and its language model
         run: pip install --quiet -r tools/requirements-pii.txt
       - name: Read every tracked file for emails, phone, ID and card numbers and people's names
-        run: python tools/pii_scan.py
+        run: git ls-files -z | python tools/pii_scan.py
 
   ash:
     uses: awslabs/automated-security-helper/.github/workflows/run-ash-security-scan.yml@f356ca77388a4c58bcf25d904a21121ab8872a66 # v3.8.0

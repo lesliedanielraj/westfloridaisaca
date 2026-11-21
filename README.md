@@ -212,7 +212,7 @@ not for personal details:
 | No personal details | [Presidio](https://microsoft.github.io/presidio/) finds an email address, a phone, Social Security or card number, or what looks like a person's first and last name, in the contents of any tracked file |
 
 Run the second one yourself with `pip install -r tools/requirements-pii.txt` and then
-`python tools/pii_scan.py`. A harmless match, such as a firm named after a person, goes in
+`git ls-files -z | python tools/pii_scan.py`. A harmless match, such as a firm named after a person, goes in
 `.pii-allowlist.txt` after someone has looked at it. In code, a name is only reported when
 it looks like one (two or three capitalised words), so a name written another way can pass.
 

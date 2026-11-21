@@ -1,8 +1,8 @@
 """Look through the files in this repository for personal details that should not be here.
 
-Usage:  python tools/pii_scan.py            (run from the repository root)
+Usage:  git ls-files -z | python tools/pii_scan.py
 
-It reads every text file git tracks and stops with exit code 1 if it finds an email address, a phone
+It reads every text file git tracks (the list comes from git on standard input) and stops with exit code 1 if it finds an email address, a phone
 number, a Social Security or card number, or what looks like a person's first and last name. It is the pull-request counterpart of the
 check the loader runs on member data (backend/privacy.py), and uses the same tool, Microsoft Presidio.
 
@@ -11,7 +11,6 @@ name in a test) goes in .pii-allowlist.txt, one per line, after a person has loo
 """
 import pathlib
 import re
-import subprocess
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -32,8 +31,7 @@ TOO_LOOSE_FOR_CODE = {"US_DRIVER_LICENSE", "US_BANK_NUMBER", "US_PASSPORT", "US_
 KINDS = [kind for kind in privacy.BLOCKED if kind not in TOO_LOOSE_FOR_CODE] + privacy.NAMES
 
 
-def tracked_files():
-    listed = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, capture_output=True, check=True).stdout.decode()
+def tracked_files(listed):
     for name in filter(None, listed.split("\0")):
         if name.startswith(SKIP_DIRS) or name.endswith(SKIP_ENDINGS) or name.rsplit("/", 1)[-1] in SKIP_NAMES:
             continue
@@ -49,12 +47,12 @@ def allowed():
     return {line.lower() for line in lines if line and not line.startswith("#")}
 
 
-def scan():
+def scan(listed):
     """Findings as (file, line number, kind, matched text), leaving out anything on the allowlist."""
     ok = allowed()
     engine = privacy.analyzer()
     found = []
-    for name, path in tracked_files():
+    for name, path in tracked_files(listed):
         try:
             lines = path.read_text(encoding="utf-8").splitlines()
         except UnicodeDecodeError:
@@ -72,7 +70,10 @@ def scan():
 
 
 def main():
-    found = scan()
+    if sys.stdin.isatty():
+        print("Give the list of files on standard input:  git ls-files -z | python tools/pii_scan.py")
+        return 2
+    found = scan(sys.stdin.read())
     if not found:
         print("No personal details found in the tracked files.")
         return 0
