@@ -11,11 +11,13 @@ const FRAME = { type: 'MultiPoint', coordinates: [[-83.2, 26.85], [-81.35, 28.95
 const kept = { transform: null, width: 0 };
 
 // Counties shaded by members, with a circle per home ZIP code. `picked` outlines one county.
-export default function FloridaMap({ counties, zips, picked, label }) {
+// With `onPick`, a click on a county that has members, or on one of its ZIP circles, calls it with the county's name.
+export default function FloridaMap({ counties, zips, picked, label, onPick }) {
   const tip = useTip();
   const [ref, width] = useWidth();
   const svgRef = useRef(null);
   const control = useRef(null);
+  const clickTimer = useRef(null);
   const [view, setView] = useState(zoomIdentity);
   const w = Math.max(240, width || 480);
   const h = Math.round(Math.min(w * 1.3, 640));
@@ -46,13 +48,16 @@ export default function FloridaMap({ counties, zips, picked, label }) {
       });
     control.current = { svg, behaviour };
     svg.call(behaviour).on('dblclick.zoom', null);
-    svg.on('dblclick', (event) => svg.call(behaviour.scaleBy, 2, pointer(event)));
+    svg.on('dblclick', (event) => {
+      clearTimeout(clickTimer.current); // a double-click zooms; it is not two picks
+      svg.call(behaviour.scaleBy, 2, pointer(event));
+    });
     const scale = kept.width ? w / kept.width : 1;
     const start = kept.transform
       ? zoomIdentity.translate(kept.transform.x * scale, kept.transform.y * scale).scale(kept.transform.k)
       : zoomIdentity;
     svg.call(behaviour.transform, start);
-    return () => { svg.on('.zoom', null).on('dblclick', null); };
+    return () => { clearTimeout(clickTimer.current); svg.on('.zoom', null).on('dblclick', null); };
   }, [width, w, h, tip]);
 
   // The map is drawn even before the counts arrive, so zooming is wired up once and stays.
@@ -66,6 +71,13 @@ export default function FloridaMap({ counties, zips, picked, label }) {
   const labelFrom = k >= 4 ? 1 : k >= 2 ? 5 : 20;
   const zoomBy = (factor) => control.current && control.current.svg.call(control.current.behaviour.scaleBy, factor);
   const reset = () => control.current && control.current.svg.call(control.current.behaviour.transform, zoomIdentity);
+  // Waits a moment before picking, so the first click of a double-click does not filter. A drag never gets here:
+  // the zoom behaviour swallows the click that ends one.
+  const pick = (county) => {
+    clearTimeout(clickTimer.current);
+    clickTimer.current = setTimeout(() => onPick(county), 220);
+  };
+  const pickable = (county) => Boolean(onPick && county && byName.has(county));
 
   return (
     <div ref={ref} className="wf-map-box">
@@ -75,13 +87,16 @@ export default function FloridaMap({ counties, zips, picked, label }) {
           {outlines.map((o) => {
             const c = byName.get(o.name);
             const on = picked === o.name;
+            const can = pickable(o.name);
             return (
               <path key={o.name} d={o.d} vectorEffect="non-scaling-stroke"
+                onClick={can ? () => pick(o.name) : undefined}
                 style={{
+                  cursor: can ? 'pointer' : undefined,
                   fill: COLORS[0], fillOpacity: c ? shade(+c.members) : 0,
                   stroke: on ? 'var(--color-fg)' : 'var(--cds-chart-axis)', strokeWidth: on ? 2 : 0.8,
                 }}
-                {...tip.props(`${o.name} County: ${c ? `${fmt.int(c.members)} members (${fmt.pct(c.share)})` : counties ? 'no members' : 'loading'}`)} />
+                {...tip.props(`${o.name} County: ${c ? `${fmt.int(c.members)} members (${fmt.pct(c.share)})` : counties ? 'no members' : 'loading'}${can ? (on ? '. Click to clear the filter' : '. Click to filter') : ''}`)} />
             );
           })}
         </g>
@@ -91,7 +106,8 @@ export default function FloridaMap({ counties, zips, picked, label }) {
             if (!p) return null;
             return (
               <circle key={z.zip} cx={view.applyX(p[0])} cy={view.applyY(p[1])} r={Math.max(1.5, radius(+z.members)) * k ** 0.4}
-                style={{ fill: COLORS[1], fillOpacity: 0.7, stroke: 'var(--color-panel)', strokeWidth: 0.7 }}
+                onClick={pickable(z.county) ? () => pick(z.county) : undefined}
+                style={{ fill: COLORS[1], fillOpacity: 0.7, stroke: 'var(--color-panel)', strokeWidth: 0.7, cursor: pickable(z.county) ? 'pointer' : undefined }}
                 {...tip.props(`ZIP ${z.zip}${z.place ? `, ${z.place}` : ''}: ${fmt.int(z.members)} ${+z.members === 1 ? 'member' : 'members'}`)} />
             );
           })}

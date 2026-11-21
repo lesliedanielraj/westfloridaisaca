@@ -18,12 +18,12 @@ export default function Where() {
     <section className="wf-pane" id="where">
       <h2 className="wf-h2">Where members live</h2>
       <p className="wf-sub">
-        By home ZIP code. Shading shows members per county; each circle is one ZIP code, sized by its members. Zoom with the
-        buttons, a double-click or a pinch, or hold Ctrl or ⌘ while scrolling; drag to move once zoomed in.
+        By home ZIP code. Shading shows members per county; each circle is one ZIP code, sized by its members. Click a county to
+        filter every tab by it, and click it again to clear. Zoom with the buttons, a double-click or a pinch, or hold Ctrl or ⌘ while scrolling; drag to move once zoomed in.
       </p>
       <div className="wf-two">
         <div className="wf-card wf-map">
-          <FloridaMap counties={counties && counties.rows} zips={zips && zips.rows} picked={values.county}
+          <FloridaMap counties={counties && counties.rows} zips={zips && zips.rows} picked={values.county} onPick={(county) => toggle('county', county)}
             label="Map of west central Florida with counties shaded by member count and a circle for each home ZIP code" />
         </div>
         <div className="wf-stack">
