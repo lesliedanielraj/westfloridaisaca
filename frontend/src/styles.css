@@ -43,9 +43,8 @@
 }
 html { background: var(--color-bg); }
 body { margin: 0; background: var(--color-bg); color: var(--color-fg); font-family: var(--font-anthropic-sans); font-size: var(--cds-font-size-body); line-height: 1.4; -webkit-text-size-adjust: 100%; }
-.wf-app { max-width: 1280px; margin: 0 auto; padding: 28px 24px 48px; box-sizing: border-box; }
-.wf-app *, .wf-app *::before, .wf-app *::after { box-sizing: border-box; }
-@media (max-width: 520px) { .wf-app { padding: 18px 14px 36px; } }
+/* Sizes include padding and borders everywhere on the site. */
+.wf-shell, .wf-shell *, .wf-shell *::before, .wf-shell *::after { box-sizing: border-box; }
 .wf-head { position: relative; }
 .wf-theme { float: right; margin: 4px 0 8px 16px; font: inherit; font-size: var(--cds-font-size-caption); color: var(--color-fg); background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: 6px 10px; cursor: pointer; }
 .dash-select { font: inherit; font-size: var(--cds-font-size-body); color: var(--color-fg); background-color: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: 6px 8px; max-width: 100%; }
@@ -456,3 +455,78 @@ button.wf-chip { cursor: pointer; }
 .wf-settings-panel .wf-swatch-btn { width: 28px; height: 28px; }
 .wf-settings-note { margin-top: 12px; font-size: 11px; color: var(--color-fg-muted); }
 @media print { .wf-settings { display: none; } }
+
+/* Responsive layout.
+   Rows of cards are sized from the width of the page area, not the window, so they come out the same whether
+   the navigation pane is open, collapsed or hidden. No row ends with one card beside an empty space: the
+   cards in the last row widen to fill it. */
+.wf-content { container: page / inline-size; }
+.wf-kpis, .wf-takes, .wf-grid { grid-template-columns: repeat(12, minmax(0, 1fr)); }
+.wf-kpis > *, .wf-takes > *, .wf-grid > * { grid-column: span 12; min-width: 0; }
+
+/* Headline tiles: all in one row when there is room, then three across, then two. */
+@container page (min-width: 1000px) {
+  .wf-kpis, .wf-takes { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
+  .wf-kpis > *, .wf-takes > * { grid-column: auto; }
+}
+@container page (min-width: 560px) and (max-width: 999.98px) {
+  .wf-kpis > * { grid-column: span 4; }
+  .wf-kpis > :first-child:nth-last-child(4), .wf-kpis > :first-child:nth-last-child(4) ~ * { grid-column: span 6; }
+  .wf-kpis > :first-child:nth-last-child(5) ~ :nth-child(n+4) { grid-column: span 6; }
+  .wf-kpis > :first-child:nth-last-child(2), .wf-kpis > :first-child:nth-last-child(2) ~ * { grid-column: span 6; }
+  .wf-takes > * { grid-column: span 6; }
+  .wf-takes > :last-child:nth-child(odd) { grid-column: span 12; }
+}
+@container page (max-width: 559.98px) {
+  .wf-kpis > * { grid-column: span 6; }
+  .wf-kpis > :last-child:nth-child(odd) { grid-column: span 12; }
+}
+
+/* Groups of chart cards: one row when wide, otherwise two across, otherwise stacked. */
+@container page (min-width: 1180px) {
+  .wf-grid { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
+  .wf-grid > * { grid-column: auto; }
+}
+@container page (min-width: 620px) and (max-width: 1179.98px) {
+  .wf-grid > * { grid-column: span 6; }
+  .wf-grid > :last-child:nth-child(odd) { grid-column: span 12; }
+}
+@container page (min-width: 900px) and (max-width: 1179.98px) {
+  .wf-grid > :first-child:nth-last-child(3), .wf-grid > :first-child:nth-last-child(3) ~ * { grid-column: span 4; }
+}
+
+/* The five certification rings: five across, then three over two, then two across with the last centred. */
+.wf-rings { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.wf-rings > * { grid-column: span 3; min-width: 0; }
+.wf-rings > :last-child:nth-child(odd) { grid-column: span 6; }
+@container page (min-width: 500px) {
+  .wf-rings > * { grid-column: span 2; }
+  .wf-rings > :first-child:nth-last-child(5) ~ :nth-child(n+4), .wf-rings > :last-child:nth-child(odd) { grid-column: span 3; }
+}
+@container page (min-width: 860px) {
+  .wf-rings { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
+  .wf-rings > *, .wf-rings > :first-child:nth-last-child(5) ~ :nth-child(n+4), .wf-rings > :last-child:nth-child(odd) { grid-column: auto; }
+}
+
+/* On a narrow page the filters line up two across, each as wide as its column, and the tabs scroll sideways. */
+@container page (max-width: 620px) {
+  .wf-filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; width: 100%; }
+  .wf-filters .wf-drill-pick { display: flex; flex-direction: column; align-items: stretch; gap: 4px; margin: 0; }
+  .wf-filters .dash-select { width: 100%; max-width: none; }
+  .wf-filters .wf-clear { grid-column: 1 / -1; justify-self: start; }
+  .wf-tabs { flex-wrap: nowrap; width: 100%; margin-left: 0; overflow-x: auto; scrollbar-width: thin; -webkit-overflow-scrolling: touch; }
+  .wf-tab { flex: 0 0 auto; }
+  .wf-flow-nums { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .wf-flow-net { grid-column: 1 / -1; }
+  .wf-renew { justify-content: center; }
+  .wf-drill-head { flex-wrap: wrap; gap: 8px; }
+}
+
+/* Narrow pages: tables scroll sideways inside their card, and a bar's name sits on its own line above the bar. */
+.wf-scroll { overflow-x: auto; }
+@container page (max-width: 620px) {
+  .wf-bars, .wf-bars.wf-wide { grid-template-columns: minmax(0, 1fr) auto; row-gap: 3px; }
+  .wf-bars > .wf-bar-label { grid-column: 1 / -1; margin-top: 7px; overflow-wrap: normal; word-break: normal; }
+  .wf-meterlist { grid-template-columns: minmax(0, 1fr) auto; row-gap: 3px; }
+  .wf-meterlist > .wf-bar-label { grid-column: 1 / -1; margin-top: 7px; }
+}
