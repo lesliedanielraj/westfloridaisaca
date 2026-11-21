@@ -17,14 +17,16 @@ from typing import Optional
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.staticfiles import StaticFiles
 
-from . import classify
+from . import classify, privacy
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 DB_PATH = pathlib.Path(os.environ.get("MEMBERS_DB", ROOT / "data" / "members.db"))
 SITE = ROOT / "frontend" / "dist"
 
-# Lists shorter than this are not broken out by name, so a row never points at one or two people.
-MIN_GROUP = 3
+# Lists shorter than this are not broken out by name, so a row never points at a handful of people.
+MIN_GROUP = privacy.K
+# A set of filters that selects fewer members than this (but not none) shows nothing at all.
+MIN_SELECTION = privacy.K
 
 app = FastAPI(title="West Florida ISACA Member Insights API", version="1.0.0")
 
@@ -80,7 +82,16 @@ def selected(
     if exclude in values:
         values[exclude] = None
     con.execute(SELECT_MEMBERS, values)
+    chosen = con.execute("SELECT COUNT(*) FROM sel").fetchone()[0]
+    if 0 < chosen < MIN_SELECTION:
+        # Too few members to describe without describing individuals: answer as if none matched, and say why.
+        con.execute("DELETE FROM sel")
+        con.execute("CREATE TEMP TABLE sel_withheld (reason TEXT)")
     return con
+
+
+def withheld(con):
+    return bool(con.execute("SELECT COUNT(*) FROM sqlite_temp_master WHERE name = 'sel_withheld'").fetchone()[0])
 
 
 def share(count, total):
@@ -132,16 +143,15 @@ def summary(con=Depends(selected)):
     as_of = dt.date.fromisoformat(m["as_of"])
     one = con.execute(
         """SELECT COUNT(*) AS members,
-                  COALESCE(SUM(m.join_date >= :d90), 0) AS new_90d,
-                  COALESCE(SUM(m.join_date >= :d365), 0) AS new_12mo,
+                  COALESCE(SUM(m.joined_90d), 0) AS new_90d,
+                  COALESCE(SUM(m.joined_12mo), 0) AS new_12mo,
                   COALESCE(SUM(m.n_certs > 0), 0) AS certified,
                   COALESCE(SUM(m.expiry_date <= :year_end), 0) AS renewal_due,
                   COALESCE(SUM(m.in_florida), 0) AS in_florida,
                   COALESCE(SUM(EXISTS (SELECT 1 FROM member_certs c WHERE c.member_id = m.id
                                        AND c.cert IN (SELECT value FROM json_each(:ai_certs)))), 0) AS ai_cert_holders
            FROM sel m""",
-        {"d90": str(as_of - dt.timedelta(days=90)), "d365": str(as_of - dt.timedelta(days=365)),
-         "year_end": "%d-12-31" % as_of.year, "ai_certs": json.dumps(list(classify.AI_CERTS))},
+        {"year_end": "%d-12-31" % as_of.year, "ai_certs": json.dumps(list(classify.AI_CERTS))},
     ).fetchone()
     n = one["members"]
     tenures = [r[0] for r in con.execute("SELECT m.tenure_years FROM sel m WHERE m.tenure_years IS NOT NULL")]
@@ -150,6 +160,8 @@ def summary(con=Depends(selected)):
     everyone = con.execute("SELECT COUNT(*) FROM members").fetchone()[0]
     return {
         "as_of": m["as_of"],
+        "withheld": withheld(con),
+        "min_selection": MIN_SELECTION,
         "members": n,
         "share_of_all": share(n, everyone),
         "new_90d": one["new_90d"],
@@ -248,12 +260,10 @@ def certifications(con=Depends(selected)):
 @app.get("/api/counties")
 def counties(con=Depends(selected)):
     """Members by Florida county of their home ZIP code."""
-    as_of = dt.date.fromisoformat(meta(con)["as_of"])
     n = total(con)
-    found = rows(con, """SELECT m.county AS county, COUNT(*) AS members, SUM(m.join_date >= ?) AS new_12mo,
+    found = rows(con, """SELECT m.county AS county, COUNT(*) AS members, SUM(m.joined_12mo) AS new_12mo,
                                 SUM(m.n_certs > 0) AS certified
-                         FROM sel m WHERE m.county IS NOT NULL GROUP BY m.county ORDER BY members DESC, county""",
-                 [str(as_of - dt.timedelta(days=365))])
+                         FROM sel m WHERE m.county IS NOT NULL GROUP BY m.county ORDER BY members DESC, county""")
     return {"total": n, "rows": [dict(r, share=share(r["members"], n)) for r in found]}
 
 
@@ -268,7 +278,7 @@ def zips(con=Depends(selected)):
 
 @app.get("/api/cities")
 def cities(con=Depends(selected)):
-    """Florida home cities with three or more of the selected members."""
+    """Florida home cities with five or more of the selected members."""
     n = total(con)
     found = rows(con, """SELECT m.city AS city, COUNT(*) AS members FROM sel m WHERE m.city IS NOT NULL
                          GROUP BY m.city HAVING COUNT(*) >= ? ORDER BY members DESC, city""", [MIN_GROUP])
@@ -311,11 +321,26 @@ def joins(by: str, con=Depends(selected)):
 
 @app.get("/api/employers")
 def employers(con=Depends(selected)):
-    """Employers with three or more of the selected members, common name variants merged."""
+    """Employers with five or more of the selected members, common name variants merged."""
     n = total(con)
     found = rows(con, """SELECT m.employer AS employer, COUNT(*) AS members FROM sel m WHERE m.employer IS NOT NULL
                          GROUP BY m.employer HAVING COUNT(*) >= ? ORDER BY members DESC, employer""", [MIN_GROUP])
     return {"total": n, "rows": [dict(r, share=share(r["members"], n)) for r in found]}
+
+
+@app.get("/api/loads")
+def loads(con=Depends(db)):
+    """Each monthly report loaded, with what changed since the one before: who joined, left and rejoined,
+    and how many members' details changed. The first report has nothing to compare with."""
+    return {"rows": rows(con, """SELECT report_date, members, joined, left_chapter AS left, rejoined, changed
+                                 FROM loads ORDER BY report_date""")}
+
+
+@app.get("/api/changes")
+def changes(con=Depends(db)):
+    """Counts of changes between monthly reports, by kind and by the detail that changed. Counts only."""
+    return {"rows": rows(con, """SELECT report_date, kind, COALESCE(field, '') AS field, COUNT(*) AS members
+                                 FROM changes GROUP BY report_date, kind, field ORDER BY report_date, kind, field""")}
 
 
 @app.get("/api/movement")

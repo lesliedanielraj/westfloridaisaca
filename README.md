@@ -9,7 +9,7 @@ It has three parts:
 
 | Part | What it is | Where |
 |---|---|---|
-| Database | SQLite, one row per member with personal details removed | `data/members.db` (not committed) |
+| Database | SQLite: each member's history under a pseudonym, with personal details removed | `data/members.db` (not committed) |
 | API | Python and FastAPI; answers with counts, never a member row | `backend/` |
 | Website | React; reads everything from the API | `frontend/` |
 
@@ -19,17 +19,56 @@ The ISACA reports are confidential and for chapter leaders only. This repository
 code. `.gitignore` keeps out the reports (`raw/`), the database (`data/`) and the built
 site (`dist/`).
 
-The database is de-identified, not anonymous. The ingest never writes names, emails,
-phone numbers, street addresses, job titles or ISACA member IDs, and it shuffles the
-rows. Each row still holds a ZIP code, employer and seniority, which together can point
-to one person, so treat `data/members.db` as chapter-internal.
-
 **There is no sign-in yet.** The server listens on this computer only. Do not put it on
 the internet until sign-in is added.
 
+## How members are protected
+
+Each month's reports are loaded by `backend/ingest.py`, and everything runs on this
+computer: no report, and nothing from one, is sent anywhere.
+
+| Layer | What it does |
+|---|---|
+| Allowlist | Only the columns the ingest names are read. Names, emails, phone numbers, street addresses, job titles and member IDs are never stored. |
+| Pseudonym | The member ID becomes a keyed hash (HMAC-SHA256). The same member gets the same hash each month, which is how changes are tracked, and it cannot be reversed without the key. |
+| The key | Kept in this computer's keychain (or the `MEMBERS_KEY` environment variable), never in the database or the repository. |
+| Coarser values | Join and expiry dates are kept to the month. An employer, ZIP code or city shared by fewer than five members is blanked. |
+| Checks that stop a load | [Presidio](https://microsoft.github.io/presidio/) and plain patterns scan every stored piece of text for emails, phone, ID and card numbers and people's names. [Pandera](https://pandera.readthedocs.io) checks that only allowed columns and values are stored. If either fails, nothing is stored. |
+| Display floor | The site lists an employer or city only at five or more of the members shown, and shows nothing when the filters select fewer than five. |
+| Reports deleted | The report files are deleted after a successful load. |
+
+What this does not do:
+
+- **The database is not anonymous.** Almost every row is still unique on what an outsider
+  could know (county, employer, gender, seniority, join month), which the loader reports
+  on each run. Treat `data/members.db` as confidential.
+- **The key is the weak point.** Anyone with the key and a roster can link the two. Back
+  the key up somewhere safe: without it, next month's report cannot be matched to this
+  one, and the loader refuses a database made with a different key.
+- **Finding a person's name in text is a judgement by a language model** and can miss.
+  The five-member floor is the main protection for free text. Firms named after people
+  (Raymond James) are listed in `backend/pii_allowlist.txt` after a person has checked them.
+- **Small counts still appear inside charts**, such as a credential held by three members
+  or a transfer from one chapter.
+- **Deleting a report does not scrub it** from the disk, the Trash or backups.
+
+## Monthly loads
+
+1. Download the month's reports from the Chapter Leader Portal
+   (<https://leaders.isaca.org/view-reports>) into `raw/`: Member Roster - Full, and
+   New Member, Transfer IN and Transfer OUT.
+2. Run `./load-month.command` (or the `python -m backend.ingest` line under "Run it").
+3. Restart the website.
+
+Each load adds to the history. It records who joined, left and rejoined since the last
+report, who renewed, who gained a credential, and whose county, employer, level or
+seniority changed. A roster already loaded, or one dated no later than the last, is
+refused. The loader prints the counts, and `/api/loads` and `/api/changes` return them.
+
 ## Run it
 
-You need a recent Python 3 and Node.js 22 or later.
+You need Python 3.10 or later and Node.js 22 or later. On a Mac, `./load-month.command`
+and `./run-local.command` do steps 1, 3 and 4 for you.
 
 1. Install:
 
@@ -42,7 +81,8 @@ You need a recent Python 3 and Node.js 22 or later.
    (<https://leaders.isaca.org/view-reports>) into `raw/`: Member Roster - Full, New
    Member, Transfer IN and Transfer OUT.
 
-3. Load them into the database. Each run replaces it.
+3. Load them into the database. The first load makes the pseudonym key and installs the
+   checking tools, which include a 400 MB language model.
 
    ```sh
    python -m backend.ingest --roster raw/MemberRoster_041.xlsx \
@@ -52,6 +92,7 @@ You need a recent Python 3 and Node.js 22 or later.
    ```
 
    The last three are optional. Without them the "Joined and left" section is hidden.
+   The report files are deleted afterwards unless you add `--keep-reports`.
 
 4. Build the site and start the server:
 
@@ -62,7 +103,7 @@ You need a recent Python 3 and Node.js 22 or later.
 
    Open <http://127.0.0.1:8000>.
 
-To refresh the figures, download new reports and repeat step 3.
+Each month, download new reports and repeat step 3: see "Monthly loads".
 
 ### While developing
 
@@ -95,7 +136,9 @@ Interactive documentation is at <http://127.0.0.1:8000/docs> while the server ru
 | `GET /api/region-function` | Members by home region and job function |
 | `GET /api/joins/year`, `/api/joins/month` | Current members by when they joined |
 | `GET /api/renewal/{dimension}` | Members who have already renewed into next year, by `tenure`, `seniority` or `member_level` |
-| `GET /api/employers` | Employers with three or more of the selected members |
+| `GET /api/employers` | Employers with five or more of the selected members |
+| `GET /api/loads` | Each monthly report loaded, with how many joined, left, rejoined and changed |
+| `GET /api/changes` | Counts of changes between monthly reports, by kind |
 | `GET /api/movement?month=YYYY-MM` | Who joined and left over the 90 days the reports cover |
 
 Every endpoint except `meta` and `movement` takes the same optional filters, and they
@@ -113,8 +156,9 @@ combine:
 | `credential` | `CISA` |
 | `exclude` | `county`: ignore that one filter for this request, so a chart that sets a filter can still show the other choices |
 
-Employers and cities are returned only at three or more members, so a row never names
-one or two people.
+Employers and cities are returned only at five or more members, and a set of filters
+that selects fewer than five members returns nothing, so no answer describes a handful
+of people.
 
 ## How the numbers are made
 
@@ -155,7 +199,9 @@ value. Keep it that way: a statement assembled from strings fails the scan.
 
 ```
 backend/
-  ingest.py        reports -> data/members.db, personal details removed
+  ingest.py        a month's reports -> data/members.db, personal details removed
+  privacy.py       the pseudonym key, the five-member floor and the checks
+  pii_allowlist.txt  firms named after people, checked by hand
   classify.py      seniority, job function and employer rules
   main.py          the API
   tests/           checks on the ingest and API, with a made-up roster

@@ -9,21 +9,22 @@ import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
 
-from backend import classify, ingest, main
+from backend import classify, ingest, main, privacy
 
 TITLE = "ISACA Chapter Member Roster\nTest Chapter (999)\nas of 11/18/2026 08:00:00 PM Chicago Time"
 check = unittest.TestCase()  # assertEqual and friends; a failure shows both sides
+KEY = bytes(range(32))  # a fixed pseudonym key for the tests
 MARKER = "ZZ-PRIVATE"  # stands in for every personal detail; must never reach the database
 
 
-def member(n, area, zip_code, city, company, joined, certs=(), level="Gold", state="Florida"):
+def member(n, area, zip_code, city, company, joined, certs=(), level="Gold", state="Florida", expiry="12/31/26"):
     row = {
         "Member ID": f"{MARKER}-{n}", "First Name": f"{MARKER}-first", "Last / Family Name": f"{MARKER}-last",
         "Email": f"{MARKER}@example.org", "Home Phone": f"{MARKER}-phone", "Home Address 1": f"{MARKER} Street",
         "Title": f"{MARKER}-title",
         "Professional Area": area, "Member Level": level, "Member Type": "Professional Membership", "Gender": "Female",
         "Company": company, "Home City": city, "Home State": state, "Home Zip": zip_code,
-        "Join Date": joined, "Expiry Date": "12/31/26",
+        "Join Date": joined, "Expiry Date": expiry,
     }
     row.update({c: ("Y" if c in certs else None) for c in classify.CERTS})
     return row
@@ -57,21 +58,39 @@ def client(tmp_path_factory):
     write_report(folder / "out.xlsx", "Outgoing transfers 11/18/2026", transfer("20261007", "Test Chapter", "Denver Chapter"), 3)
 
     db_path = folder / "members.db"
-    as_of, members, certs, zips, top = ingest.read_roster(folder / "roster.xlsx")
-    movement_as_of, movements = ingest.read_movements(folder / "new.xlsx", folder / "in.xlsx", folder / "out.xlsx")
-    ingest.write_db(db_path, as_of, members, certs, zips, top, movements, movement_as_of)
+    # The made-up chapter is tiny, so these tests use a floor of 2 where the real one is 5.
+    as_of, members, now, zips, top, figures = ingest.read_roster(folder / "roster.xlsx", KEY, k=2)
+    movement_as_of, movements = ingest.read_movements(folder / "new.xlsx", folder / "in.xlsx", folder / "out.xlsx", KEY)
+    ingest.load(db_path, KEY, folder / "roster.xlsx", as_of, members, now, zips, top, figures, movements, movement_as_of)
 
     patch = pytest.MonkeyPatch()
     patch.setattr(main, "DB_PATH", db_path)
+    patch.setattr(main, "MIN_GROUP", 3)
+    patch.setattr(main, "MIN_SELECTION", 1)
     yield TestClient(main.app), db_path
     patch.undo()
+
+
+def roster_file(path, as_of, rows):
+    write_report(path, "ISACA Chapter Member Roster\nTest Chapter (999)\nas of %s 08:00:00 PM Chicago Time" % as_of, rows)
+    return path
+
+
+def add_month(db_path, path, k=2):
+    as_of, members, now, zips, top, figures = ingest.read_roster(path, KEY, k=k)
+    return ingest.load(db_path, KEY, path, as_of, members, now, zips, top, figures)
 
 
 def test_no_personal_details_are_stored(client):
     _, db_path = client
     check.assertNotIn(MARKER.encode(), db_path.read_bytes())
-    columns = {r[1] for r in sqlite3.connect(db_path).execute("PRAGMA table_info(members)")}
-    check.assertFalse(columns & {"name", "first_name", "last_name", "email", "phone", "address", "member_id", "title"})
+    con = sqlite3.connect(db_path)
+    for table in ("members", "versions", "changes", "movements"):
+        columns = {r[1] for r in con.execute("SELECT * FROM pragma_table_info(?)", [table])}
+        check.assertFalse(columns & {"name", "first_name", "last_name", "email", "phone", "address", "member_id", "title"})
+    # Join and expiry dates are kept to the month, and the API's view of members carries no member key.
+    check.assertEqual(con.execute("SELECT COUNT(*) FROM versions WHERE join_date NOT LIKE '%-01' OR expiry_date NOT LIKE '%-01'").fetchone()[0], 0)
+    check.assertNotIn("pid", {r[1] for r in con.execute("SELECT * FROM pragma_table_info('members')")})
 
 
 def test_summary_counts_everyone(client):
@@ -123,7 +142,8 @@ def test_small_groups_are_not_named(client):
 def test_geography(client):
     api, _ = client
     check.assertEqual({r["county"]: r["members"] for r in api.get("/api/counties").json()["rows"]}, {"Hillsborough": 3, "Pinellas": 2})
-    check.assertEqual({r["zip"]: r["members"] for r in api.get("/api/zips").json()["rows"]}, {"33602": 2, "33606": 1, "33701": 2})
+    # ZIP code 33606 has one member, under the floor, so it is not stored; that member still counts in the county.
+    check.assertEqual({r["zip"]: r["members"] for r in api.get("/api/zips").json()["rows"]}, {"33602": 2, "33701": 2})
 
 
 def test_movement(client):
@@ -164,3 +184,94 @@ def test_renewal_by_group(client):
     check.assertEqual([x["category"] for x in r["rows"]][:2], ["C-suite and executives", "Directors, managers and consultants"])
     check.assertEqual(sum(x["members"] for x in r["rows"]), 6)
     check.assertEqual(api.get("/api/renewal/shoe_size").status_code, 404)
+
+
+MONTH_1 = [
+    member(1, "CISO/CSO, Security Executive/VP/EVP", "33602", "Tampa", "PwC", "10/01/26", ["CISM"]),
+    member(2, "Security Director/Manager/Consultant", "33602", "Tampa", "PwC", "01/15/20"),
+    member(3, "IT Auditor (External/Internal Staff)", "33602", "Tampa", "Citi", "03/01/15"),
+    member(4, "IT Auditor (External/Internal Staff)", "33701", "Saint Petersburg", "Citi", "06/01/26"),
+]
+
+
+def test_changes_from_month_to_month(tmp_path):
+    db_path = tmp_path / "members.db"
+    first = add_month(db_path, roster_file(tmp_path / "m1.xlsx", "11/18/2026", MONTH_1))
+    check.assertEqual((first["first"], first["joined"], first["left"]), (True, 0, 0))
+
+    # A month on: member 1 renews and gains CRISC, member 2 moves to Pinellas, member 4 is gone, member 5 is new.
+    month_2 = [
+        member(1, "CISO/CSO, Security Executive/VP/EVP", "33602", "Tampa", "PwC", "10/01/26", ["CISM", "CRISC"], expiry="12/31/27"),
+        member(2, "Security Director/Manager/Consultant", "33701", "Saint Petersburg", "PwC", "01/15/20"),
+        member(3, "IT Auditor (External/Internal Staff)", "33602", "Tampa", "Citi", "03/01/15"),
+        member(5, "Student", "33701", "Saint Petersburg", "Citi", "12/01/26"),
+    ]
+    second = add_month(db_path, roster_file(tmp_path / "m2.xlsx", "12/18/2026", month_2))
+    check.assertEqual((second["joined"], second["left"], second["rejoined"], second["changed"]), (1, 1, 0, 2))
+
+    con = sqlite3.connect(db_path)
+    kinds = [tuple(r) for r in con.execute("SELECT kind, COALESCE(field, ''), COALESCE(new_value, '') FROM changes ORDER BY kind, field, new_value")]
+    check.assertEqual(kinds, [("changed", "county", "Pinellas"), ("credential_gained", "certs", "CRISC"), ("joined", "", ""),
+                              ("left", "", ""), ("renewed", "expiry_date", "2027-12-01")])
+    # History: six rows in all, four of them current; the member who left keeps a closed row.
+    check.assertEqual(con.execute("SELECT COUNT(*), SUM(valid_to IS NULL) FROM versions").fetchone(), (7, 4))
+    check.assertEqual(con.execute("SELECT COUNT(*) FROM members").fetchone()[0], 4)
+    check.assertNotIn(MARKER.encode(), db_path.read_bytes())
+
+    # Member 4 comes back: the same pseudonym, so it counts as a return, not a stranger.
+    third = add_month(db_path, roster_file(tmp_path / "m3.xlsx", "01/18/2027", month_2 + [MONTH_1[3]]))
+    check.assertEqual((third["joined"], third["rejoined"], third["left"]), (0, 1, 0))
+
+
+def test_loads_that_are_refused(tmp_path):
+    db_path = tmp_path / "members.db"
+    path = roster_file(tmp_path / "m1.xlsx", "11/18/2026", MONTH_1)
+    add_month(db_path, path)
+    with check.assertRaisesRegex(privacy.PrivacyError, "already been loaded"):
+        add_month(db_path, path)
+    with check.assertRaisesRegex(privacy.PrivacyError, "not later"):
+        add_month(db_path, roster_file(tmp_path / "old.xlsx", "10/18/2026", MONTH_1[:3]))
+    with check.assertRaisesRegex(privacy.PrivacyError, "different pseudonym key"):
+        ingest.open_db(db_path, bytes(32))
+    check.assertEqual(sqlite3.connect(db_path).execute("SELECT COUNT(*) FROM loads").fetchone()[0], 1)
+
+
+def test_floor_blanks_what_few_members_share(tmp_path):
+    _, members, _, zips, _, figures = ingest.read_roster(roster_file(tmp_path / "m.xlsx", "11/18/2026", MONTH_1), KEY, k=5)
+    for column in ("employer", "zip", "city"):
+        check.assertTrue(members[column].isna().all())
+    check.assertEqual((figures["blanked"], zips), ({"employer": 4, "zip": 4, "city": 4}, []))
+    check.assertTrue(members["county"].notna().all())  # the county is still known
+
+
+def test_personal_details_in_text_stop_the_load(tmp_path):
+    for company, kind in [("jane.doe@example.org", "EMAIL_ADDRESS"), ("Call 813-555-0142", "PHONE_NUMBER"), ("John Smith", "PERSON")]:
+        rows = [member(n, "Student", "33602", "Tampa", company, "10/01/26") for n in (1, 2)]
+        with check.assertRaisesRegex(privacy.PrivacyError, kind):
+            ingest.read_roster(roster_file(tmp_path / "bad.xlsx", "11/18/2026", rows), KEY, k=2)
+    extra = MONTH_1[:1] + [dict(MONTH_1[1], **{"Unexpected": "x"})]
+    frame = ingest.read_roster(roster_file(tmp_path / "ok.xlsx", "11/18/2026", extra), KEY, k=2)[1]
+    check.assertNotIn("Unexpected", frame.columns)  # a column the ingest does not name is never read in
+    with check.assertRaisesRegex(privacy.PrivacyError, "Columns differ"):
+        privacy.check_frame(frame.assign(email="x"), ("pid",) + ingest.VERSION_COLUMNS, ingest.CATEGORIES)
+
+
+def test_a_selection_of_a_few_members_shows_nothing(client, monkeypatch):
+    api, _ = client
+    monkeypatch.setattr(main, "MIN_SELECTION", 5)
+    few = api.get("/api/summary", params={"credential": "CISM"}).json()  # two members hold it
+    check.assertEqual((few["members"], few["withheld"]), (0, True))
+    check.assertEqual(api.get("/api/breakdown/seniority", params={"credential": "CISM"}).json()["rows"], [])
+    everyone = api.get("/api/summary").json()
+    check.assertEqual((everyone["members"], everyone["withheld"]), (6, False))
+
+
+def test_reports_are_deleted_after_loading(tmp_path, monkeypatch):
+    path = roster_file(tmp_path / "m1.xlsx", "11/18/2026", [dict(row) for row in MONTH_1] * 1)
+    monkeypatch.setenv("MEMBERS_KEY", KEY.hex())
+    monkeypatch.setattr(privacy, "K", 2)
+    monkeypatch.setattr("sys.argv", ["ingest", "--roster", str(path), "--db", str(tmp_path / "members.db")])
+    monkeypatch.setattr(ingest.read_roster, "__defaults__", (2,))
+    ingest.main()
+    check.assertFalse(path.exists())
+    check.assertEqual(sqlite3.connect(tmp_path / "members.db").execute("SELECT COUNT(*) FROM members").fetchone()[0], 4)

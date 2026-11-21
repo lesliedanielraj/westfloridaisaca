@@ -1,0 +1,5 @@
+# Employer names that Presidio reads as a person's name but are firms.
+# One per line, exactly as the site shows the employer. Add a name here only after checking
+# that it is an organisation: this list switches the name check off for that value.
+Raymond James
+Auditwerx

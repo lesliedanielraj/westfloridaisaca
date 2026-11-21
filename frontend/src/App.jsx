@@ -51,7 +51,12 @@ function Header({ summary }) {
       <div className="wf-brand"><img className="wf-logo" src={logo} alt="ISACA West Florida Chapter" width="462" height="160" /></div>
       <h1 className="wf-title">West Florida ISACA Member Insights</h1>
       <p className="wf-lede">
-        {s ? <><b>{fmt.int(s.members)}</b> members{any ? ' match the filters' : ''}, as of {fmt.date(s.as_of)}. Counts only: the site holds no names or contact details.</> : '—'}
+        {!s ? '—' : s.withheld ? (
+          <>Fewer than {s.min_selection} members match these filters, so nothing is shown: figures for so few would describe
+            individuals. Clear a filter to see more.</>
+        ) : (
+          <><b>{fmt.int(s.members)}</b> members{any ? ' match the filters' : ''}, as of {fmt.date(s.as_of)}. Counts only: the site holds no names or contact details.</>
+        )}
       </p>
     </header>
   );
@@ -100,8 +105,11 @@ function Notes() {
         <li>Seniority groups: C-suite and executives are the chief officer, VP and EVP categories; directors, managers and
           consultants are the categories named that way; staff and senior staff are the staff and auditor categories; students
           and academics are students, professors and teachers.</li>
-        <li>Employers and cities are listed only at three or more of the members shown. Employer names are as members typed
-          them, with common variants of the same name merged.</li>
+        <li>Small groups are held back to protect members. An employer, ZIP code or city shared by fewer than five members
+          is not stored, so those members count in their county and in totals but not on the employer list or as a point on
+          the map. Filters that select fewer than five members show nothing.</li>
+        <li>Dates are kept to the month. Employer names are as members typed them, with common variants of the same name
+          merged.</li>
         <li>Small groups give small numbers. A chart for a few dozen members is a count of a few people, not a trend.</li>
       </ul>
     </details>

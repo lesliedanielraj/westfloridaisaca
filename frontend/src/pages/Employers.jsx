@@ -7,10 +7,10 @@ import { fmt } from '../util.js';
 
 const TOP = 20;
 const SIZES = [
-  { name: '3 to 4', from: 3, to: 4 }, { name: '5 to 9', from: 5, to: 9 }, { name: '10 to 19', from: 10, to: 19 },
+  { name: '5 to 9', from: 5, to: 9 }, { name: '10 to 19', from: 10, to: 19 },
   { name: '20 to 49', from: 20, to: 49 }, { name: '50 or more', from: 50, to: Infinity },
 ];
-const NONE = 'No employer has three or more of these members';
+const NONE = 'No employer has five or more of these members';
 
 export default function Employers() {
   const { values } = useFilters();
@@ -31,13 +31,13 @@ export default function Employers() {
   return (
     <section className="wf-pane" id="employers">
       <h2 className="wf-h2">Employers</h2>
-      <p className="wf-sub">Employers with three or more of the members shown, as a guide to sponsors, hosts and corporate outreach.</p>
+      <p className="wf-sub">Employers with five or more of the members shown, as a guide to sponsors, hosts and corporate outreach.</p>
 
       <div className="wf-kpis">
         <div className="wf-card wf-kpi">
-          <div className="wf-k-label">Employers with three or more members</div>
+          <div className="wf-k-label">Employers with five or more members</div>
           <div className="wf-k-num">{data ? fmt.int(rows.length) : '—'}</div>
-          <div className="wf-k-sub">smaller employers are not named, so no row points to one or two people</div>
+          <div className="wf-k-sub">smaller employers are not stored or named, so no row points to a handful of people</div>
         </div>
         <div className="wf-card wf-kpi">
           <div className="wf-k-label">Members who work at them</div>
@@ -63,7 +63,7 @@ export default function Employers() {
       <div className="wf-two wf-gap">
         <div className="wf-card">
           <div className="wf-drill-head">
-            <h3 className="wf-h3 wf-flow-title">Every employer with three or more</h3>
+            <h3 className="wf-h3 wf-flow-title">Every employer with five or more</h3>
             <input className="wf-find" type="search" value={find} onChange={(e) => setFind(e.target.value)}
               placeholder="Find an employer" aria-label="Find an employer" />
           </div>
